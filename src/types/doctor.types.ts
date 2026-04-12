@@ -4,6 +4,7 @@
 // The Doctor interface represents the complete structure of a doctor record, including metadata fields like $createdAt and $updatedAt.
 // The CreateDoctorDTO and UpdateDoctorDTO interfaces define the expected structure of data when creating or updating a doctor record, respectively.
 //src/types/doctor.types.ts
+
 import type { Models } from 'appwrite';
 
 export type DoctorDocument = Models.Document & {
@@ -24,7 +25,12 @@ export type DoctorDocument = Models.Document & {
   licenseDocumentId?: string;
   profileImageId?: string;
   isVerified: boolean;
+  isActivated: boolean;
   education?: string;
+  
+  // NEW: Geolocation fields for nearest doctor search
+  latitude?: number;
+  longitude?: number;
 };
 
 export interface Doctor {
@@ -46,7 +52,13 @@ export interface Doctor {
   licenseDocumentId?: string;
   profileImageId?: string;
   isVerified: boolean;
+  isActivated: boolean;
   education?: string;
+  
+  // NEW: Geolocation fields for nearest doctor search
+  latitude?: number;
+  longitude?: number;
+  
   $createdAt: string;
   $updatedAt: string;
 }
@@ -69,6 +81,11 @@ export interface CreateDoctorDTO {
   licenseDocumentId?: string;
   profileImageId?: string;
   education?: string;
+  
+  // NEW: Geolocation fields (optional during registration)
+  latitude?: number;
+  longitude?: number;
+  isActivated: boolean;
 }
 
 export interface UpdateDoctorDTO {
@@ -88,4 +105,8 @@ export interface UpdateDoctorDTO {
   profileImageId?: string;
   isVerified?: boolean;
   education?: string;
+  
+  // NEW: Allow updating coordinates
+  latitude?: number;
+  longitude?: number;
 }

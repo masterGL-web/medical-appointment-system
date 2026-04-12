@@ -1,3 +1,4 @@
+//src/app/patient/dashboard/page.tsx
 'use client';
 
 export default function PatientDashboardPage() {

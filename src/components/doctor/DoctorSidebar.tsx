@@ -11,6 +11,7 @@ import {
   Users,
   User,
   LogOut,
+  CalendarClock ,
   Stethoscope,
 } from 'lucide-react';
 
@@ -24,6 +25,11 @@ const navigation = [
     name: 'Dashboard',
     href: '/doctor/dashboard',
     icon: LayoutDashboard,
+  },
+  {
+    name: 'Availability', // ✅ أضف هذا
+    href: '/doctor/availability',
+    icon: CalendarClock,
   },
   {
     name: 'Appointments',

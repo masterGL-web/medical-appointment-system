@@ -27,12 +27,123 @@ function mapDoctor(doc: DoctorDocument): Doctor {
     profileImageId: doc.profileImageId,
     isVerified: doc.isVerified,
     education: doc.education,
+    latitude: doc.latitude,
+    longitude: doc.longitude,
     $createdAt: doc.$createdAt,
     $updatedAt: doc.$updatedAt,
   };
 }
 
 class DoctorService {
+  /**
+ * Search specializations with autocomplete (uses full-text index)
+ * Returns unique specializations matching the query
+ */
+async searchSpecializations(query: string): Promise<string[]> {
+  try {
+    // Handle empty query
+    if (!query || query.trim().length === 0) {
+      return [];
+    }
+
+    // Search using full-text index
+    const response = await databases.listDocuments<DoctorDocument>(
+      DATABASE_ID,
+      DOCTORS_COLLECTION_ID,
+      [
+        Query.equal('isVerified', true), // Only verified doctors
+        Query.search('specialization', query.trim()),
+        Query.limit(50), // Limit results for performance
+      ]
+    );
+
+    // Extract unique specializations
+    const specializations = [
+      ...new Set(
+        response.documents
+          .map((doc) => doc.specialization)
+          .filter((spec) => spec && spec.trim().length > 0)
+      ),
+    ];
+
+    // Sort alphabetically
+    return specializations.sort((a, b) => a.localeCompare(b));
+  } catch (error) {
+    console.error('Error searching specializations:', error);
+    return [];
+  }
+}
+
+/**
+ * Search verified doctors with filters
+ * Supports: specialization, city, search query
+ */
+async searchDoctors(filters: {
+  specialization?: string;
+  city?: string;
+  searchQuery?: string;
+}): Promise<Doctor[]> {
+  try {
+    const queries: string[] = [Query.equal('isVerified', true)];
+
+    // Filter by specialization (exact match)
+    if (filters.specialization && filters.specialization.trim()) {
+      queries.push(Query.equal('specialization', filters.specialization.trim()));
+    }
+
+    // Filter by city (exact match)
+    if (filters.city && filters.city.trim()) {
+      queries.push(Query.equal('city', filters.city.trim()));
+    }
+
+    // Search by name if provided
+    if (filters.searchQuery && filters.searchQuery.trim()) {
+      // Note: This will search in firstName or lastName if you have full-text index
+      queries.push(Query.search('firstName', filters.searchQuery.trim()));
+    }
+
+    queries.push(Query.orderDesc('$createdAt'));
+    queries.push(Query.limit(100));
+
+    const response = await databases.listDocuments<DoctorDocument>(
+      DATABASE_ID,
+      DOCTORS_COLLECTION_ID,
+      queries
+    );
+
+    return response.documents.map(mapDoctor);
+  } catch (error) {
+    console.error('Error searching doctors:', error);
+    throw new Error('Failed to search doctors');
+  }
+}
+
+/**
+ * Get all unique specializations from verified doctors
+ * Used for initial autocomplete suggestions
+ */
+async getAllSpecializations(): Promise<string[]> {
+  try {
+    const response = await databases.listDocuments<DoctorDocument>(
+      DATABASE_ID,
+      DOCTORS_COLLECTION_ID,
+      [Query.equal('isVerified', true), Query.limit(500)]
+    );
+
+    const specializations = [
+      ...new Set(
+        response.documents
+          .map((doc) => doc.specialization)
+          .filter((spec) => spec && spec.trim().length > 0)
+      ),
+    ];
+
+    return specializations.sort((a, b) => a.localeCompare(b));
+  } catch (error) {
+    console.error('Error fetching specializations:', error);
+    return [];
+  }
+}
   /**
    * Upload file to Appwrite Storage
    */
@@ -190,5 +301,167 @@ class DoctorService {
       throw new Error('Failed to search doctors');
     }
   }
+  /**
+ * Get all verified doctors (for patient search)
+ */
+async getVerifiedDoctors(): Promise<Doctor[]> {
+  try {
+    const response = await databases.listDocuments<DoctorDocument>(
+      DATABASE_ID,
+      DOCTORS_COLLECTION_ID,
+      [
+        Query.equal('isVerified', true),
+        Query.orderDesc('$createdAt'),
+        Query.limit(100), // Adjust as needed
+      ]
+    );
+
+    const doctors = response.documents.map(mapDoctor);
+    
+    // Verify latitude and longitude are present
+    const docsWithCoords = doctors.filter(d => d.latitude != null && d.longitude != null);
+    console.log(`📍 Loaded ${doctors.length} doctors. ${docsWithCoords.length} have coordinates.`);
+    if (docsWithCoords.length > 0) {
+      console.log('✅ Sample doctor with location:', {
+        name: `${docsWithCoords[0].firstName} ${docsWithCoords[0].lastName}`,
+        latitude: docsWithCoords[0].latitude,
+        longitude: docsWithCoords[0].longitude,
+      });
+    }
+    
+    return doctors;
+  } catch (error) {
+    console.error('Error fetching verified doctors:', error);
+    throw new Error('Failed to fetch doctors');
+  }
+}
+
+/**
+ * Search verified doctors by name or specialization
+ */
+async searchVerifiedDoctors(query: string): Promise<Doctor[]> {
+  try {
+    const response = await databases.listDocuments<DoctorDocument>(
+      DATABASE_ID,
+      DOCTORS_COLLECTION_ID,
+      [
+        Query.equal('isVerified', true),
+        Query.search('firstName', query),
+        Query.limit(100),
+      ]
+    );
+
+    // Also search by last name and specialization
+    const lastNameResults = await databases.listDocuments<DoctorDocument>(
+      DATABASE_ID,
+      DOCTORS_COLLECTION_ID,
+      [
+        Query.equal('isVerified', true),
+        Query.search('lastName', query),
+        Query.limit(100),
+      ]
+    );
+
+    const specializationResults = await databases.listDocuments<DoctorDocument>(
+      DATABASE_ID,
+      DOCTORS_COLLECTION_ID,
+      [
+        Query.equal('isVerified', true),
+        Query.search('specialization', query),
+        Query.limit(100),
+      ]
+    );
+
+    // Combine and deduplicate results
+    const allDocs = [
+      ...response.documents,
+      ...lastNameResults.documents,
+      ...specializationResults.documents,
+    ];
+
+    const uniqueDocs = Array.from(
+      new Map(allDocs.map((doc) => [doc.$id, doc])).values()
+    );
+
+    return uniqueDocs.map(mapDoctor);
+  } catch (error) {
+    console.error('Error searching doctors:', error);
+    throw new Error('Failed to search doctors');
+  }
+}
+
+/**
+ * Filter verified doctors by city and/or specialization
+ */
+async filterVerifiedDoctors(filters: {
+  city?: string;
+  specialization?: string;
+}): Promise<Doctor[]> {
+  try {
+    const queries = [Query.equal('isVerified', true)];
+
+    if (filters.city) {
+      queries.push(Query.equal('city', filters.city));
+    }
+
+    if (filters.specialization) {
+      queries.push(Query.equal('specialization', filters.specialization));
+    }
+
+    queries.push(Query.orderDesc('$createdAt'));
+    queries.push(Query.limit(100));
+
+    const response = await databases.listDocuments<DoctorDocument>(
+      DATABASE_ID,
+      DOCTORS_COLLECTION_ID,
+      queries
+    );
+
+    return response.documents.map(mapDoctor);
+  } catch (error) {
+    console.error('Error filtering doctors:', error);
+    throw new Error('Failed to filter doctors');
+  }
+}
+
+/**
+ * Get unique cities where verified doctors practice
+ */
+async getDoctorCities(): Promise<string[]> {
+  try {
+    const response = await databases.listDocuments<DoctorDocument>(
+      DATABASE_ID,
+      DOCTORS_COLLECTION_ID,
+      [Query.equal('isVerified', true), Query.limit(100)]
+    );
+
+    const cities = [...new Set(response.documents.map((doc) => doc.city))];
+    return cities.sort();
+  } catch (error) {
+    console.error('Error fetching doctor cities:', error);
+    return [];
+  }
+}
+
+/**
+ * Get unique specializations of verified doctors
+ */
+async getDoctorSpecializations(): Promise<string[]> {
+  try {
+    const response = await databases.listDocuments<DoctorDocument>(
+      DATABASE_ID,
+      DOCTORS_COLLECTION_ID,
+      [Query.equal('isVerified', true), Query.limit(100)]
+    );
+
+    const specializations = [
+      ...new Set(response.documents.map((doc) => doc.specialization)),
+    ];
+    return specializations.sort();
+  } catch (error) {
+    console.error('Error fetching specializations:', error);
+    return [];
+  }
+}
 }
 export const doctorService = new DoctorService();

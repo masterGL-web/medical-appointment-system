@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
   Calendar,
-  CalendarPlus,
   User,
   LogOut,
   Activity,
+  Search, // ADDED
 } from 'lucide-react';
 
 interface PatientSidebarProps {
@@ -26,14 +26,14 @@ const navigation = [
     icon: LayoutDashboard,
   },
   {
+    name: 'Find Doctors', // ADDED
+    href: '/patient/doctors',
+    icon: Search,
+  },
+  {
     name: 'My Appointments',
     href: '/patient/appointments',
     icon: Calendar,
-  },
-  {
-    name: 'Book Appointment',
-    href: '/patient/book-appointment',
-    icon: CalendarPlus,
   },
   {
     name: 'Profile',
