@@ -32,15 +32,17 @@
 //   return today === apptDate;
 // }
 //src/components/doctor/AppointmentsTable.tsx
-import { AppointmentWithPatient } from '@/types/appointment.types'; // CHANGED
+import { AppointmentWithPatient } from '@/types/appointment.types';
 import { AppointmentRow } from '@/components/doctor/AppointmentRow';
-import { SortField, SortDirection } from '@/app/doctor/dashboard/page';
+import { SortField, SortDirection } from '@/app/doctor/appointments/page';
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface AppointmentsTableProps {
-  appointments: AppointmentWithPatient[]; // CHANGED
+  appointments: AppointmentWithPatient[];
   onUpdate: () => void;
+  /** Full name of the logged-in doctor, forwarded to AppointmentRow for notification emails */
+  doctorName: string;
   sortField: SortField;
   sortDirection: SortDirection;
   onSortChange: (field: SortField) => void;
@@ -49,6 +51,7 @@ interface AppointmentsTableProps {
 export function AppointmentsTable({
   appointments,
   onUpdate,
+  doctorName,
   sortField,
   sortDirection,
   onSortChange,
@@ -111,6 +114,7 @@ export function AppointmentsTable({
           key={appointment.$id}
           appointment={appointment}
           onUpdate={onUpdate}
+          doctorName={doctorName}
           isToday={isToday(appointment.date)}
           index={index}
         />

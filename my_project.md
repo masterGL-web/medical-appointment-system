@@ -3,7 +3,8 @@
 **Project Name**: My Appointments  
 **Type**: Full-Stack Healthcare Appointment Platform  
 **Status**: Production-Ready  
-**Tech Stack**: Next.js 14 • TypeScript • Tailwind CSS • Appwrite • React Leaflet  
+**Last Updated**: April 15, 2026  
+**Tech Stack**: Next.js 14 • TypeScript • Tailwind CSS v4 • Appwrite • React Leaflet  
 
 ---
 
@@ -11,14 +12,15 @@
 
 | Aspect | Details |
 |--------|---------|
-| **Purpose** | Healthcare platform connecting patients and doctors for appointment booking |
-| **Core Innovation** | **Availability Templates** (doctors define weekly hours) + **Email Activation** (email verification required) |
-| **User Roles** | Patients (search, book, manage) • Doctors (configure availability, view appointments) |
-| **Architecture** | Next.js Components → Services (business logic) → Appwrite SDK → NoSQL database |
-| **Authentication** | Role-based (Patient/Doctor) via Appwrite Sessions + Email Verification |
-| **Key Collections** | 5 collections (Doctors, Patients, Appointments, DoctorAvailability, **Activations**) |
-| **Deployment** | Next.js SSR server + Appwrite backend (self-hosted or cloud) |
-| **Tech Highlights** | Type-safe (TypeScript), Email verification, Real-time geolocation, Interactive maps (Leaflet), Responsive UI (Tailwind) |
+| **Purpose** | Healthcare platform connecting patients and doctors for intelligent appointment booking |
+| **Core Innovation** | **Dynamic Availability Templates** (doctors define once, slots generated on-demand) + **Email Activation** (required account verification) |
+| **User Roles** | Patients (discover, book, manage appointments) • Doctors (template management, appointment handling) |
+| **Architecture** | Next.js 14 (SSR) → Service Layer (business logic) → Appwrite SDK → NoSQL database |
+| **Authentication** | Role-based sessions (Patient/Doctor) + email verification + isActivated flag |
+| **Key Collections** | 5 collections in Appwrite (doctors, patients, appointments, doctor_availability, activations) |
+| **Deployment** | Next.js server (SSR) + self-hosted/cloud Appwrite backend |
+| **Why It's Different** | Type-safe TypeScript, email verification required, real-time geolocation, interactive maps, responsive design, non-blocking notification system |
+| **Performance** | On-demand slot generation (< 100ms), virtual list rendering for large datasets, optimized queries with indices |
 
 ---
 
@@ -60,6 +62,68 @@ My Appointments solves this through:
 - Configure profile, clinic details, specializations
 - Monitor appointment schedule and patient flow
 - Activate account via email verification
+
+---
+
+## API Routes & Backend Integration
+
+### Overview
+My Appointments uses Next.js API Routes for server-side operations that cannot run in the browser. All routes are in `/src/app/api/` and handle critical operations like email sending and in-app notifications.
+
+### Key API Routes
+
+#### 1. **POST `/api/notify-appointment`** - Appointment Notifications
+**Purpose**: Send email & create in-app notification when appointment is confirmed/cancelled  
+**Access**: Server-side, called from appointment confirmation/cancellation actions  
+**Implementation**: Server-side Appwrite SDK (`node-appwrite`) for secure database writes
+
+**Request Body**:
+```typescript
+interface NotifyAppointmentBody {
+  patientEmail: string           // Patient's email for email notification
+  patientName: string            // Patient name (greeting)
+  patientUserId: string          // User ID (for in-app notification)
+  doctorName: string             // Doctor name (for email/notification)
+  status: 'confirmed' | 'cancelled'
+  date: string                   // YYYY-MM-DD
+  startTime: string              // HH:mm
+}
+```
+
+**Response**:
+```typescript
+{ ok: true }  // Email sent + in-app notification created
+```
+
+**Error Handling**:
+- Email failure → HTTP 500 (critical, blocks response)
+- In-app notification failure → console.log (non-blocking, never breaks email)
+
+**Implementation Details**:
+
+```typescript
+// Inside the route handler:
+1. Log: "API CALLED" (debug trace)
+2. Parse request body → validate NotifyAppointmentBody
+3. Send email via Nodemailer:
+   - Service: Gmail SMTP
+   - Template: Conditional (confirmed/cancelled)
+   - Localization: Algerian date/time format
+4. Create in-app notification (try-catch, non-blocking):
+   - Initialize server-side Appwrite client with API_KEY
+   - Call: databases.createDocument(...)
+   - Log: "Creating notification..."
+   - Log: "Notification created successfully"
+   - On error: log full error object, continue
+5. Return: { ok: true }
+```
+
+**Critical**: Uses server-side `node-appwrite` SDK, NOT browser SDK (`appwrite` package). The browser SDK lacks server authentication and would silently fail. API routes have access to `APPWRITE_API_KEY` environment variable for proper server authentication.
+
+**Localization** (Algerian):
+- Date format: "mercredi 15 avril 2026" (French locale: `fr-DZ`)
+- Time format: "10:30" (24-hour)
+- Timezone: Africa/Algiers (UTC+1)
 
 ---
 
@@ -251,6 +315,156 @@ Activation {
 - Alternative: Move to API route (`/api/auth/register/patient`)
 
 ---
+
+## In-App Notifications System
+
+### Overview
+In-app notifications provide real-time feedback to patients about their appointments. Unlike emails, these appear directly in the application interface. The system uses Appwrite's `notifications` collection to persist notification records in the database.
+
+### Notification Architecture
+
+```
+Trigger Event (Appointment confirmed/cancelled)
+         ↓
+API Route: /api/notify-appointment
+         ↓
+1. Send Email (Nodemailer)
+         ↓
+2. Create In-App Notification (Appwrite SDK)
+         ├─ Initialize server client with API_KEY
+         ├─ Call: databases.createDocument()
+         ├─ Collection: notifications
+         └─ Fields: userId, title, message, type, read, link, createdAt
+```
+
+### Notification Document Structure
+
+**Appwrite Collection: `notifications`**
+
+```typescript
+interface Notification {
+  $id: string                   // Appwrite document ID
+  userId: string                // Patient user ID
+  title: string                 // "Appointment confirmed"
+  message: string               // Full notification text
+  type: string                  // "appointment_confirmed" | "appointment_cancelled"
+  read: boolean                 // false (new), true (viewed)
+  link: string                  // "/patient/appointments" (click to navigate)
+  createdAt: string             // ISO datetime
+  $createdAt: string            // System timestamp
+  $updatedAt: string            // System update timestamp
+}
+```
+
+### Notification Types
+
+| Type | Title | Message | Link |
+|------|-------|---------|------|
+| `appointment_confirmed` | "Appointment confirmed" | "Your appointment with Dr. {name} on {date} at {time} is confirmed." | `/patient/appointments` |
+| `appointment_cancelled` | "Appointment cancelled" | "Your appointment with Dr. {name} on {date} at {time} was cancelled." | `/patient/appointments` |
+
+### Service Implementation
+
+**notificationService.ts**:
+```typescript
+class NotificationService {
+  // Create notification in database
+  async createNotification(dto: {
+    userId: string
+    title: string
+    message: string
+    type: string
+    read?: boolean
+    link?: string
+  }): Promise<Notification>
+  
+  // Fetch unread notifications for user
+  async getUnreadNotifications(userId: string): Promise<Notification[]>
+  
+  // Mark as read
+  async markAsRead(notificationId: string): Promise<void>
+  
+  // Delete notification
+  async deleteNotification(notificationId: string): Promise<void>
+}
+```
+
+### Key Principles
+
+1. **Non-Blocking**: Notification failures never prevent emails or appointment creation
+2. **Server-Side Only**: Uses `node-appwrite` SDK with `APPWRITE_API_KEY` for authentication
+3. **Real-Time**: Appears in UI as soon as created (no polling required if using Appwrite Realtime)
+4. **Audit Trail**: All notifications timestamped and immutable (no deletion by default)
+5. **User-Centric**: Linked to patient's userId for personalized feeds
+
+### Implementation in `/api/notify-appointment`
+
+```typescript
+// Inside the route handler (after email sent successfully)
+try {
+  console.log('Creating notification...');
+  
+  // Initialize server-side Appwrite client
+  const client = new Client()
+    .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!)
+    .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!)
+    .setKey(process.env.APPWRITE_API_KEY!);  // ← Server auth key
+  
+  const databases = new Databases(client);
+  
+  // Write directly to database (not via service layer in API route)
+  await databases.createDocument(
+    process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
+    process.env.NEXT_PUBLIC_APPWRITE_NOTIFICATIONS_COLLECTION_ID!,
+    ID.unique(),
+    {
+      userId: patientUserId,
+      title: status === 'confirmed' ? 'Appointment confirmed' : 'Appointment cancelled',
+      message: `Your appointment with Dr. ${doctorName} on ${formatAlgerianDate(date)} at ${formatAlgerianTime(startTime)} is ${status === 'confirmed' ? 'confirmed' : 'cancelled'}.`,
+      type: status === 'confirmed' ? 'appointment_confirmed' : 'appointment_cancelled',
+      read: false,
+      link: '/patient/appointments',
+      createdAt: new Date().toISOString()
+    }
+  );
+  
+  console.log('Notification created successfully');
+} catch (notifError: unknown) {
+  // Non-blocking: log error but continue
+  console.error('❌ In-app notification failed (non-blocking):', notifError);
+}
+```
+
+### Environment Variables Required
+
+For in-app notifications to work, ensure these are set in `.env.local`:
+
+```env
+# Appwrite Connection
+NEXT_PUBLIC_APPWRITE_ENDPOINT=https://appwrite.example.com/v1
+NEXT_PUBLIC_APPWRITE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_APPWRITE_DATABASE_ID=your_database_id
+NEXT_PUBLIC_APPWRITE_NOTIFICATIONS_COLLECTION_ID=notifications_collection_id
+APPWRITE_API_KEY=your_api_key_here  # ← Server-only (not exposed to client)
+```
+
+⚠️ **Critical**: `APPWRITE_API_KEY` should NEVER be used in browser code (e.g., `@/lib/appwrite.ts`). API routes execute server-side and can safely use this key.
+
+### Verification Checklist
+
+When implementing or debugging notifications:
+- [ ] API route receives POST with correct body
+- [ ] Console log "API CALLED" appears in server logs
+- [ ] Console log "Creating notification..." appears
+- [ ] No 500 error thrown (notification failure is non-blocking)
+- [ ] New document appears in Appwrite `notifications` collection
+- [ ] Document has correct `userId`, matching patient who booked appointment
+- [ ] `read: false` is set for new notifications
+- [ ] `createdAt` timestamp is generated correctly
+
+---
+
+## Email Activation System - Detailed Reference
 
 
 

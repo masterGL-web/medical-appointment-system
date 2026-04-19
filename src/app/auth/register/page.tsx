@@ -300,6 +300,7 @@ export default function RegisterPage() {
         userId: user.$id,
         firstName,
         lastName,
+        email,
         phone: phone || undefined,
         dateOfBirth: toAppwriteDatetime(dateOfBirth),
         gender,

@@ -34,12 +34,14 @@ export interface Appointment {
   $updatedAt: string;
 }
 
-// NEW: Appointment with embedded patient data
+// Appointment with embedded patient data
 export interface AppointmentWithPatient extends Appointment {
   patient: {
+    userId: string;       // ← ADDED: needed to target notifications
     firstName: string;
     lastName: string;
     fullName: string;
+    email: string;        // ← ADDED: needed to send email notifications
     phone?: string;
   };
 }
@@ -65,6 +67,7 @@ export interface AppointmentFilters {
   fromDate?: string;
   toDate?: string;
 }
+
 export interface AppointmentWithDoctor extends Appointment {
   doctor: {
     firstName: string;
