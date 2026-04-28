@@ -296,6 +296,7 @@ import {
   XCircle,
   Clock,
   Calendar as CalendarIcon,
+  UserX,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -308,7 +309,7 @@ interface AppointmentRowProps {
   index: number;
 }
 
-// ─── Helper: fire-and-forget notification ─────────────────────────────────────
+// ─── Helper: fire-and-forget email notification ───────────────────────────────
 
 function notifyPatient(
   appointment: AppointmentWithPatient,
@@ -328,9 +329,30 @@ function notifyPatient(
       startTime:     appointment.startTime,
     }),
   }).catch((err) => {
-    // Silent — notification failure must never surface to the doctor
     console.warn('Notification failed (non-blocking):', err);
   });
+}
+
+// ─── Helper: fire-and-forget no-show trigger ──────────────────────────────────
+
+function triggerNoShow(patientId: string): void {
+  fetch('/api/handle-noshow', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ patientId }),
+  })
+    .then(async (res) => {
+      const data = await res.json();
+      if (data?.result?.banApplied) {
+        toast.warning(
+          `⚠️ Patient has been banned after ${data.result.noShowCount} no-shows.`,
+          { duration: 5000 }
+        );
+      }
+    })
+    .catch(() => {
+      // Silent — never blocks doctor workflow
+    });
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -342,8 +364,9 @@ export function AppointmentRow({
   isToday,
   index,
 }: AppointmentRowProps) {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]                   = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showNoShowDialog, setShowNoShowDialog] = useState(false); // ← NEW
 
   const patientName     = appointment.patient.fullName;
   const patientInitials = `${appointment.patient.firstName[0]}${appointment.patient.lastName[0]}`.toUpperCase();
@@ -356,7 +379,6 @@ export function AppointmentRow({
       await appointmentService.updateStatus(appointment.$id, status);
       toast.success(`Appointment ${status} successfully`);
 
-      // Fire-and-forget email notification for confirmed/cancelled only
       if (status === 'confirmed' || status === 'cancelled') {
         notifyPatient(appointment, doctorName, status);
       }
@@ -370,7 +392,7 @@ export function AppointmentRow({
     }
   };
 
-  // ── Cancel ──────────────────────────────────────────────────────────────────
+  // ── Regular cancel ──────────────────────────────────────────────────────────
 
   const handleCancel = async () => {
     try {
@@ -383,7 +405,6 @@ export function AppointmentRow({
       toast.success('Appointment cancelled');
       setShowCancelDialog(false);
 
-      // Fire-and-forget cancellation email
       notifyPatient(appointment, doctorName, 'cancelled');
 
       onUpdate();
@@ -395,32 +416,63 @@ export function AppointmentRow({
     }
   };
 
+  // ── No-show cancel (NEW) ────────────────────────────────────────────────────
+
+  const handleNoShow = async () => {
+    try {
+      setLoading(true);
+
+      // Cancel with reason "no-show" — this is what noshow.service detects
+      await appointmentService.cancelAppointment(
+        appointment.$id,
+        'doctor',
+        'no-show'
+      );
+
+      toast.success('Appointment marked as no-show');
+      setShowNoShowDialog(false);
+
+      // Send cancellation email to patient
+      notifyPatient(appointment, doctorName, 'cancelled');
+
+      // Trigger no-show counter — may auto-ban the patient
+      triggerNoShow(appointment.patientId);
+
+      onUpdate();
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Failed to mark as no-show';
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ── Status badge config ─────────────────────────────────────────────────────
 
   const getStatusConfig = (status: AppointmentStatus) => {
     const configs = {
       pending: {
-        variant: 'secondary' as const,
-        label: 'Pending',
-        icon: Clock,
+        variant:   'secondary' as const,
+        label:     'Pending',
+        icon:      Clock,
         className: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
       },
       confirmed: {
-        variant: 'default' as const,
-        label: 'Confirmed',
-        icon: CheckCircle,
+        variant:   'default' as const,
+        label:     'Confirmed',
+        icon:      CheckCircle,
         className: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100',
       },
       completed: {
-        variant: 'secondary' as const,
-        label: 'Completed',
-        icon: CheckCircle,
+        variant:   'secondary' as const,
+        label:     'Completed',
+        icon:      CheckCircle,
         className: 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100',
       },
       cancelled: {
-        variant: 'destructive' as const,
-        label: 'Cancelled',
-        icon: XCircle,
+        variant:   'destructive' as const,
+        label:     'Cancelled',
+        icon:      XCircle,
         className: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100',
       },
     };
@@ -431,15 +483,15 @@ export function AppointmentRow({
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+      day:   'numeric',
+      year:  'numeric',
     });
   };
 
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour        = parseInt(hours);
+    const ampm        = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minutes} ${ampm}`;
   };
@@ -447,9 +499,9 @@ export function AppointmentRow({
   const statusConfig = getStatusConfig(appointment.status);
   const StatusIcon   = statusConfig.icon;
 
-  const canConfirm = appointment.status === 'pending';
+  const canConfirm  = appointment.status === 'pending';
   const canComplete = appointment.status === 'confirmed';
-  const canCancel =
+  const canCancel   =
     appointment.status !== 'cancelled' && appointment.status !== 'completed';
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -522,7 +574,7 @@ export function AppointmentRow({
               </Button>
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-52">
               {canConfirm && (
                 <DropdownMenuItem
                   onClick={() => handleStatusChange('confirmed')}
@@ -546,20 +598,32 @@ export function AppointmentRow({
               {(canConfirm || canComplete) && canCancel && <DropdownMenuSeparator />}
 
               {canCancel && (
-                <DropdownMenuItem
-                  onClick={() => setShowCancelDialog(true)}
-                  className="gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Cancel
-                </DropdownMenuItem>
+                <>
+                  {/* Regular cancel */}
+                  <DropdownMenuItem
+                    onClick={() => setShowCancelDialog(true)}
+                    className="gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Cancel
+                  </DropdownMenuItem>
+
+                  {/* No-show — NEW */}
+                  <DropdownMenuItem
+                    onClick={() => setShowNoShowDialog(true)}
+                    className="gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+                  >
+                    <UserX className="h-4 w-4" />
+                    Patient No-Show
+                  </DropdownMenuItem>
+                </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </motion.div>
 
-      {/* Cancel confirmation dialog */}
+      {/* ── Regular cancel dialog ── */}
       <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -576,6 +640,38 @@ export function AppointmentRow({
               className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
             >
               Yes, Cancel
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── No-show dialog — NEW ── */}
+      <AlertDialog open={showNoShowDialog} onOpenChange={setShowNoShowDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <UserX className="h-5 w-5 text-orange-600" />
+              Mark as No-Show?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p>
+                  You are marking <strong>{patientName}</strong> as a no-show for this appointment.
+                </p>
+                <p className="text-orange-700 font-medium bg-orange-50 border border-orange-200 rounded-md px-3 py-2">
+                  ⚠️ This counts toward their no-show record.
+                  After 3 no-shows the patient will be automatically banned from booking. 
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Go Back</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleNoShow}
+              className="bg-orange-600 hover:bg-orange-700 focus:ring-orange-600"
+            >
+              Yes, Mark as No-Show
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

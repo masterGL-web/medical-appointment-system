@@ -139,30 +139,37 @@ import { Patient, CreatePatientDTO, UpdatePatientDTO } from '@/types/patient.typ
 import { Query } from 'appwrite';
 import type { PatientDocument } from '@/types/patient.types';
 
-const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
+const DATABASE_ID           = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const PATIENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_PATIENTS_COLLECTION_ID!;
 
 class PatientService {
   /**
-   * Map patient document to Patient type.
-   * PUBLIC — used by appointment service.
+   * Map Appwrite document → Patient interface.
+   * PUBLIC — used by appointment service and banned page.
+   * MUST include ALL fields so ban detection works everywhere.
    */
   public mapPatient(doc: PatientDocument): Patient {
     return {
-      $id: doc.$id,
-      userId: doc.userId,
-      firstName: doc.firstName,
-      lastName: doc.lastName,
-      email: doc.email,           // ← ADDED
-      phone: doc.phone,
-      dateOfBirth: doc.dateOfBirth,
-      gender: doc.gender,
-      medicalHistory: doc.medicalHistory,
-      address: doc.address,
-      city: doc.city,
-      isActivated: doc.isActivated,
-      $createdAt: doc.$createdAt,
-      $updatedAt: doc.$updatedAt,
+      $id:             doc.$id,
+      userId:          doc.userId,
+      firstName:       doc.firstName,
+      lastName:        doc.lastName,
+      email:           doc.email,
+      phone:           doc.phone,
+      dateOfBirth:     doc.dateOfBirth,
+      gender:          doc.gender,
+      medicalHistory:  doc.medicalHistory,
+      address:         doc.address,
+      city:            doc.city,
+      isActivated:     doc.isActivated,
+      // ── Ban / no-show fields — required for /banned page logic ──────────
+      noShowCount:     (doc.noShowCount as number)          ?? 0,
+      banStatus:       (doc.banStatus  as Patient['banStatus']) ?? 'none',
+      banUntil:        (doc.banUntil   as string | null)    ?? null,
+      banReason:       (doc.banReason  as string | null)    ?? null,
+      // ────────────────────────────────────────────────────────────────────
+      $createdAt:      doc.$createdAt,
+      $updatedAt:      doc.$updatedAt,
     };
   }
 
@@ -172,7 +179,13 @@ class PatientService {
         DATABASE_ID,
         PATIENTS_COLLECTION_ID,
         ID.unique(),
-        data
+        {
+          ...data,
+          noShowCount: 0,
+          banStatus: 'none',
+          banUntil: null,
+          banReason: null,
+        }
       );
       return this.mapPatient(patientDocument);
     } catch (error) {
