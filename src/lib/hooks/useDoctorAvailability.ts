@@ -4,27 +4,39 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { availabilityService } from '@/services/availability.service';
-import { DoctorAvailability, DayOfWeek, DAY_NAMES } from '@/types/availability.types';
+import { DayOfWeek, DAY_NAMES } from '@/types/availability.types';
+
+// ─── State shape ──────────────────────────────────────────────────────────────
+// Now includes break fields so the availability page can read/write them.
 
 interface DayAvailabilityState {
-  enabled: boolean;
-  startTime: string;
-  endTime: string;
-  slotDuration: number;
+  enabled:        boolean;
+  startTime:      string;
+  endTime:        string;
+  slotDuration:   number;
+  hasBreak:       boolean;
+  breakStartTime: string | null;
+  breakEndTime:   string | null;
   availabilityId?: string;
 }
 
 type WeekAvailability = Record<DayOfWeek, DayAvailabilityState>;
 
 const DEFAULT_DAY_STATE: DayAvailabilityState = {
-  enabled: false,
-  startTime: '09:00',
-  endTime: '17:00',
-  slotDuration: 30,
+  enabled:        false,
+  startTime:      '09:00',
+  endTime:        '17:00',
+  slotDuration:   30,
+  hasBreak:       false,
+  breakStartTime: null,
+  breakEndTime:   null,
 };
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useDoctorAvailability() {
   const { doctor } = useAuth('doctor');
+
   const [weekAvailability, setWeekAvailability] = useState<WeekAvailability>({
     0: { ...DEFAULT_DAY_STATE },
     1: { ...DEFAULT_DAY_STATE },
@@ -34,18 +46,14 @@ export function useDoctorAvailability() {
     5: { ...DEFAULT_DAY_STATE },
     6: { ...DEFAULT_DAY_STATE },
   });
+
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
 
-  // Load existing availability on mount
-  useEffect(() => {
-    if (doctor) {
-      loadAvailability();
-    }
-  }, [doctor]);
+  // ── Load ─────────────────────────────────────────────────────────────────
 
-  const loadAvailability = async () => {
+  const loadAvailability = useCallback(async () => {
     if (!doctor) return;
 
     try {
@@ -54,7 +62,7 @@ export function useDoctorAvailability() {
 
       const availabilities = await availabilityService.getDoctorAvailability(doctor.$id);
 
-      // Always start from a clean default — never spread stale state
+      // Start from clean defaults every time — never spread stale state
       const loadedWeek: WeekAvailability = {
         0: { ...DEFAULT_DAY_STATE },
         1: { ...DEFAULT_DAY_STATE },
@@ -65,24 +73,34 @@ export function useDoctorAvailability() {
         6: { ...DEFAULT_DAY_STATE },
       };
 
-      availabilities.forEach((availability) => {
-        loadedWeek[availability.dayOfWeek] = {
-          enabled: true,
-          startTime: availability.startTime,
-          endTime: availability.endTime,
-          slotDuration: availability.slotDuration,
-          availabilityId: availability.$id,
+      availabilities.forEach((avail) => {
+        loadedWeek[avail.dayOfWeek] = {
+          enabled:        true,
+          startTime:      avail.startTime,
+          endTime:        avail.endTime,
+          slotDuration:   avail.slotDuration,
+          hasBreak:       avail.hasBreak       ?? false,
+          breakStartTime: avail.breakStartTime ?? null,
+          breakEndTime:   avail.breakEndTime   ?? null,
+          availabilityId: avail.$id,
         };
       });
 
       setWeekAvailability(loadedWeek);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load availability';
       console.error('Failed to load availability:', err);
-      setError(err.message || 'Failed to load availability');
+      setError(msg);
     } finally {
       setLoading(false);
     }
-  };
+  }, [doctor]);
+
+  useEffect(() => {
+    if (doctor) loadAvailability();
+  }, [doctor, loadAvailability]);
+
+  // ── Update a single day ───────────────────────────────────────────────────
 
   const updateDay = useCallback(
     (day: DayOfWeek, updates: Partial<DayAvailabilityState>) => {
@@ -94,49 +112,57 @@ export function useDoctorAvailability() {
     []
   );
 
-  const saveAvailability = async () => {
-    if (!doctor) return;
+  // ── Save ─────────────────────────────────────────────────────────────────
+
+  const saveAvailability = useCallback(async (): Promise<boolean> => {
+    if (!doctor) return false;
 
     try {
       setSaving(true);
       setError(null);
 
-      // Delete disabled days
-      const disabledDays = (Object.entries(weekAvailability) as [string, DayAvailabilityState][])
-        .filter(([_, state]) => !state.enabled && state.availabilityId)
-        .map(([_, state]) => state.availabilityId!);
+      // 1. Delete records for days that were disabled
+      const toDelete = (
+        Object.entries(weekAvailability) as [string, DayAvailabilityState][]
+      )
+        .filter(([, state]) => !state.enabled && state.availabilityId)
+        .map(([, state]) => state.availabilityId!);
 
-      await Promise.all(
-        disabledDays.map((id) => availabilityService.deleteAvailability(id))
-      );
+      await Promise.all(toDelete.map((id) => availabilityService.deleteAvailability(id)));
 
-      // Prepare enabled days for bulk upsert
-      const enabledDays = (Object.entries(weekAvailability) as [string, DayAvailabilityState][])
-        .filter(([_, state]) => state.enabled)
+      // 2. Upsert records for enabled days — now includes break fields
+      const toUpsert = (
+        Object.entries(weekAvailability) as [string, DayAvailabilityState][]
+      )
+        .filter(([, state]) => state.enabled)
         .map(([dayStr, state]) => ({
-          doctorId: doctor.$id,
-          dayOfWeek: Number(dayStr) as DayOfWeek,
-          startTime: state.startTime,
-          endTime: state.endTime,
-          slotDuration: state.slotDuration,
+          doctorId:       doctor.$id,
+          dayOfWeek:      Number(dayStr) as DayOfWeek,
+          startTime:      state.startTime,
+          endTime:        state.endTime,
+          slotDuration:   state.slotDuration,
+          hasBreak:       state.hasBreak,
+          breakStartTime: state.hasBreak ? (state.breakStartTime ?? null) : null,
+          breakEndTime:   state.hasBreak ? (state.breakEndTime   ?? null) : null,
         }));
 
-      if (enabledDays.length > 0) {
-        await availabilityService.bulkSetAvailability(doctor.$id, enabledDays);
+      if (toUpsert.length > 0) {
+        await availabilityService.bulkSetAvailability(doctor.$id, toUpsert);
       }
 
-      // Reload BEFORE releasing saving state so UI never shows stale data
+      // 3. Reload so local state matches what was actually saved
       await loadAvailability();
       return true;
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save availability';
       console.error('Failed to save availability:', err);
-      setError(err.message || 'Failed to save availability');
+      setError(msg);
       return false;
     } finally {
-      setSaving(false); // only releases after loadAvailability completes
+      setSaving(false);
     }
-  };
+  }, [doctor, weekAvailability, loadAvailability]);
 
   return {
     weekAvailability,

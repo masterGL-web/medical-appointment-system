@@ -629,9 +629,11 @@
 //           return {
 //             ...appointment,
 //             patient: {
+//               userId: '',
 //               firstName: 'Unknown',
 //               lastName: 'Patient',
 //               fullName: 'Unknown Patient',
+//               email: '',
 //               phone: undefined,
 //             },
 //           };
@@ -640,9 +642,11 @@
 //         return {
 //           ...appointment,
 //           patient: {
+//             userId: patient.userId,
 //             firstName: patient.firstName,
 //             lastName: patient.lastName,
 //             fullName: `${patient.firstName} ${patient.lastName}`,
+//             email: patient.email,
 //             phone: patient.phone,
 //           },
 //         };
@@ -652,9 +656,11 @@
 //       return appointments.map((apt) => ({
 //         ...apt,
 //         patient: {
+//           userId: '',
 //           firstName: 'Unknown',
 //           lastName: 'Patient',
 //           fullName: 'Unknown Patient',
+//           email: '',
 //           phone: undefined,
 //         },
 //       }));
@@ -783,15 +789,13 @@
 // export const appointmentService = new AppointmentService();
 
 // src/services/appointment.service.ts
-// src/services/appointment.service.ts
 import { databases, ID } from '@/lib/appwrite';
 import {
   Appointment,
   AppointmentDocument,
   AppointmentWithPatient,
-  AppointmentWithDoctor, // ADDED
+  AppointmentWithDoctor,
   CreateAppointmentDTO,
-  UpdateAppointmentDTO,
   AppointmentFilters,
   AppointmentStatus,
   CancelledBy,
@@ -802,104 +806,63 @@ import { patientService } from './patient.service';
 import { availabilityService } from './availability.service';
 import { DayOfWeek } from '@/types/availability.types';
 import type { Patient } from '@/types/patient.types';
-import type { Doctor } from '@/types/doctor.types'; // ADDED
+import type { Doctor } from '@/types/doctor.types';
 
-const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
+const DATABASE_ID                = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const APPOINTMENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_APPOINTMENTS_COLLECTION_ID!;
 const AVAILABILITY_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_AVAILABILITY_COLLECTION_ID!;
 
 function mapAppointment(doc: AppointmentDocument): Appointment {
   return {
-    $id: doc.$id,
-    patientId: doc.patientId,
-    doctorId: doc.doctorId,
+    $id:            doc.$id,
+    patientId:      doc.patientId,
+    doctorId:       doc.doctorId,
     availabilityId: doc.availabilityId,
-    date: doc.date,
-    startTime: doc.startTime,
-    endTime: doc.endTime,
-    status: doc.status,
-    reason: doc.reason,
-    cancelReason: doc.cancelReason,
-    cancelledBy: doc.cancelledBy,
-    $createdAt: doc.$createdAt,
-    $updatedAt: doc.$updatedAt,
+    date:           doc.date,
+    startTime:      doc.startTime,
+    endTime:        doc.endTime,
+    status:         doc.status,
+    reason:         doc.reason,
+    cancelReason:   doc.cancelReason,
+    cancelledBy:    doc.cancelledBy,
+    $createdAt:     doc.$createdAt,
+    $updatedAt:     doc.$updatedAt,
   };
 }
 
 class AppointmentService {
-  /**
-   * Validate time format (HH:mm)
-   */
+
+  // ── Private helpers ────────────────────────────────────────────────────────
+
   private validateTimeFormat(time: string): boolean {
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
     return timeRegex.test(time);
   }
 
-  /**
-   * Convert time string (HH:mm) to minutes since midnight
-   */
   private timeToMinutes(time: string): number {
     const [hours, minutes] = time.split(':').map(Number);
     return hours * 60 + minutes;
   }
 
-  /**
-   * Convert minutes since midnight to time string
-   */
   private minutesToTime(minutes: number): string {
     const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
+    const mins  = minutes % 60;
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   }
 
-  /**
-   * Get ISO datetime string from date (UTC midnight)
-   */
   private toISODateTime(date: string): string {
     const [year, month, day] = date.split('-').map(Number);
     const d = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
     return d.toISOString();
   }
 
-  /**
-   * Get UTC day range for datetime queries
-   */
   private getDayRange(date: string): { start: string; end: string } {
     const [year, month, day] = date.split('-').map(Number);
-
-    const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-    const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
-
-    return {
-      start: start.toISOString(),
-      end: end.toISOString(),
-    };
+    const start = new Date(Date.UTC(year, month - 1, day, 0,  0,  0,   0));
+    const end   = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+    return { start: start.toISOString(), end: end.toISOString() };
   }
 
-  /**
-   * Generate time slots from availability
-   */
-  private generateTimeSlotsFromAvailability(
-    startTime: string,
-    endTime: string,
-    slotDuration: number
-  ): string[] {
-    const slots: string[] = [];
-    const startMinutes = this.timeToMinutes(startTime);
-    const endMinutes = this.timeToMinutes(endTime);
-    let currentMinutes = startMinutes;
-
-    while (currentMinutes + slotDuration <= endMinutes) {
-      slots.push(this.minutesToTime(currentMinutes));
-      currentMinutes += slotDuration;
-    }
-
-    return slots;
-  }
-
-  /**
-   * Split array into chunks (SINGLE IMPLEMENTATION)
-   */
   private chunkArray<T>(array: T[], size: number): T[][] {
     const chunks: T[][] = [];
     for (let i = 0; i < array.length; i += size) {
@@ -908,31 +871,18 @@ class AppointmentService {
     return chunks;
   }
 
-  /**
-   * Get doctor document $id from userId
-   */
   private async getDoctorDocumentId(userId: string): Promise<string> {
     const doctor = await doctorService.getDoctorByUserId(userId);
-    if (!doctor) {
-      throw new Error('Doctor not found');
-    }
+    if (!doctor) throw new Error('Doctor not found');
     return doctor.$id;
   }
 
-  /**
-   * Get patient document $id from userId
-   */
   private async getPatientDocumentId(userId: string): Promise<string> {
     const patient = await patientService.getPatientByUserId(userId);
-    if (!patient) {
-      throw new Error('Patient not found');
-    }
+    if (!patient) throw new Error('Patient not found');
     return patient.$id;
   }
 
-  /**
-   * Check if doctor is verified
-   */
   private async validateDoctor(doctorDocumentId: string): Promise<void> {
     const doctor = await doctorService.getDoctorById(doctorDocumentId);
     if (!doctor.isVerified) {
@@ -940,33 +890,27 @@ class AppointmentService {
     }
   }
 
-  /**
-   * Check if appointment date is in the past
-   */
   private validateNotPast(date: string, startTime: string): void {
     const [year, month, day] = date.split('-').map(Number);
-    const appointmentDate = new Date(year, month - 1, day);
-    const [hours, minutes] = startTime.split(':').map(Number);
+    const appointmentDate    = new Date(year, month - 1, day);
+    const [hours, minutes]   = startTime.split(':').map(Number);
     appointmentDate.setHours(hours, minutes, 0, 0);
-
-    const now = new Date();
-    if (appointmentDate <= now) {
+    if (appointmentDate <= new Date()) {
       throw new Error('Cannot book appointment in the past');
     }
   }
 
-  /**
-   * Check if slot exists in doctor's availability
-   */
+  // ── validateSlotInAvailability ────────────────────────────────────────────
+
   private async validateSlotInAvailability(
     doctorDocumentId: string,
-    date: string,
-    startTime: string,
-    endTime: string
+    date:             string,
+    startTime:        string,
+    endTime:          string
   ): Promise<string | undefined> {
     const [year, month, day] = date.split('-').map(Number);
-    const appointmentDate = new Date(year, month - 1, day);
-    const dayOfWeek = appointmentDate.getDay() as DayOfWeek;
+    const appointmentDate    = new Date(year, month - 1, day);
+    const dayOfWeek          = appointmentDate.getDay() as DayOfWeek;
 
     const availability = await availabilityService.getDoctorAvailabilityByDay(
       doctorDocumentId,
@@ -977,23 +921,23 @@ class AppointmentService {
       throw new Error(`Doctor is not available on ${appointmentDate.toLocaleDateString()}`);
     }
 
-    const startMinutes = this.timeToMinutes(startTime);
-    const endMinutes = this.timeToMinutes(endTime);
-    const availStartMinutes = this.timeToMinutes(availability.startTime);
-    const availEndMinutes = this.timeToMinutes(availability.endTime);
+    const startMin   = this.timeToMinutes(startTime);
+    const endMin     = this.timeToMinutes(endTime);
+    const availStart = this.timeToMinutes(availability.startTime);
+    const availEnd   = this.timeToMinutes(availability.endTime);
 
-    if (startMinutes < availStartMinutes || endMinutes > availEndMinutes) {
+    if (startMin < availStart || endMin > availEnd) {
       throw new Error(
         `Appointment time must be between ${availability.startTime} and ${availability.endTime}`
       );
     }
 
-    const requestedDuration = endMinutes - startMinutes;
+    const requestedDuration = endMin - startMin;
     if (requestedDuration !== availability.slotDuration) {
       throw new Error(`Appointment duration must be ${availability.slotDuration} minutes`);
     }
 
-    const slots = availabilityService.generateTimeSlots(availability);
+    const slots       = availabilityService.generateTimeSlots(availability);
     const isValidSlot = slots.some((slot) => slot.time === startTime);
 
     if (!isValidSlot) {
@@ -1005,13 +949,12 @@ class AppointmentService {
     return availability.$id;
   }
 
-  /**
-   * Check if slot is already booked
-   */
+  // ── checkSlotAvailability ─────────────────────────────────────────────────
+
   async checkSlotAvailability(
     doctorDocumentId: string,
-    date: string,
-    startTime: string
+    date:             string,
+    startTime:        string
   ): Promise<boolean> {
     try {
       const { start, end } = this.getDayRange(date);
@@ -1020,11 +963,11 @@ class AppointmentService {
         DATABASE_ID,
         APPOINTMENTS_COLLECTION_ID,
         [
-          Query.equal('doctorId', doctorDocumentId),
+          Query.equal('doctorId',        doctorDocumentId),
           Query.greaterThanEqual('date', start),
-          Query.lessThanEqual('date', end),
-          Query.equal('startTime', startTime),
-          Query.notEqual('status', 'cancelled'),
+          Query.lessThanEqual('date',    end),
+          Query.equal('startTime',       startTime),
+          Query.notEqual('status',       'cancelled'),
         ]
       );
 
@@ -1035,9 +978,8 @@ class AppointmentService {
     }
   }
 
-  /**
-   * Create new appointment
-   */
+  // ── createAppointment ─────────────────────────────────────────────────────
+
   async createAppointment(data: CreateAppointmentDTO): Promise<Appointment> {
     try {
       if (!this.validateTimeFormat(data.startTime)) {
@@ -1074,32 +1016,30 @@ class AppointmentService {
         APPOINTMENTS_COLLECTION_ID,
         ID.unique(),
         {
-          patientId: data.patientId,
-          doctorId: data.doctorId,
+          patientId:      data.patientId,
+          doctorId:       data.doctorId,
           availabilityId,
-          date: isoDate,
-          startTime: data.startTime,
-          endTime: data.endTime,
-          status: 'pending',
-          reason: data.reason,
+          date:           isoDate,
+          startTime:      data.startTime,
+          endTime:        data.endTime,
+          status:         'pending',
+          reason:         data.reason,
         }
       );
 
       return mapAppointment(document);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { code?: number; message?: string };
       console.error('Error creating appointment:', error);
-
-      if (error.code === 409 || error.message?.includes('unique')) {
+      if (err.code === 409 || err.message?.includes('unique')) {
         throw new Error('This time slot is already booked');
       }
-
-      throw new Error(error.message || 'Failed to create appointment');
+      throw new Error(err.message || 'Failed to create appointment');
     }
   }
 
-  /**
-   * Get appointment by ID
-   */
+  // ── getAppointmentById ────────────────────────────────────────────────────
+
   async getAppointmentById(appointmentId: string): Promise<Appointment> {
     try {
       const document = await databases.getDocument<AppointmentDocument>(
@@ -1107,7 +1047,6 @@ class AppointmentService {
         APPOINTMENTS_COLLECTION_ID,
         appointmentId
       );
-
       return mapAppointment(document);
     } catch (error) {
       console.error('Error fetching appointment:', error);
@@ -1115,12 +1054,11 @@ class AppointmentService {
     }
   }
 
-  /**
-   * Get appointments for a doctor
-   */
+  // ── getAppointmentsByDoctor ───────────────────────────────────────────────
+
   async getAppointmentsByDoctor(
     doctorDocumentId: string,
-    filters?: AppointmentFilters
+    filters?:         AppointmentFilters
   ): Promise<Appointment[]> {
     try {
       const queries = [Query.equal('doctorId', doctorDocumentId)];
@@ -1128,12 +1066,10 @@ class AppointmentService {
       if (filters?.status) {
         queries.push(Query.equal('status', filters.status));
       }
-
       if (filters?.fromDate) {
         const { start } = this.getDayRange(filters.fromDate);
         queries.push(Query.greaterThanEqual('date', start));
       }
-
       if (filters?.toDate) {
         const { end } = this.getDayRange(filters.toDate);
         queries.push(Query.lessThanEqual('date', end));
@@ -1154,12 +1090,11 @@ class AppointmentService {
     }
   }
 
-  /**
-   * Get appointments for a patient
-   */
+  // ── getAppointmentsByPatient ──────────────────────────────────────────────
+
   async getAppointmentsByPatient(
     patientDocumentId: string,
-    filters?: AppointmentFilters
+    filters?:          AppointmentFilters
   ): Promise<Appointment[]> {
     try {
       const queries = [Query.equal('patientId', patientDocumentId)];
@@ -1167,12 +1102,10 @@ class AppointmentService {
       if (filters?.status) {
         queries.push(Query.equal('status', filters.status));
       }
-
       if (filters?.fromDate) {
         const { start } = this.getDayRange(filters.fromDate);
         queries.push(Query.greaterThanEqual('date', start));
       }
-
       if (filters?.toDate) {
         const { end } = this.getDayRange(filters.toDate);
         queries.push(Query.lessThanEqual('date', end));
@@ -1193,9 +1126,8 @@ class AppointmentService {
     }
   }
 
-  /**
-   * Update appointment status
-   */
+  // ── updateStatus ──────────────────────────────────────────────────────────
+
   async updateStatus(appointmentId: string, status: AppointmentStatus): Promise<Appointment> {
     try {
       const document = await databases.updateDocument<AppointmentDocument>(
@@ -1204,7 +1136,6 @@ class AppointmentService {
         appointmentId,
         { status }
       );
-
       return mapAppointment(document);
     } catch (error) {
       console.error('Error updating appointment status:', error);
@@ -1212,22 +1143,18 @@ class AppointmentService {
     }
   }
 
-  /**
-   * Update appointment status (alternative name for consistency)
-   */
   async updateAppointmentStatus(
     appointmentId: string,
-    status: AppointmentStatus
+    status:        AppointmentStatus
   ): Promise<Appointment> {
     return this.updateStatus(appointmentId, status);
   }
 
-  /**
-   * Cancel appointment
-   */
+  // ── cancelAppointment ─────────────────────────────────────────────────────
+
   async cancelAppointment(
     appointmentId: string,
-    cancelledBy: CancelledBy,
+    cancelledBy:   CancelledBy,
     cancelReason?: string
   ): Promise<Appointment> {
     try {
@@ -1236,7 +1163,6 @@ class AppointmentService {
       if (appointment.status === 'cancelled') {
         throw new Error('Appointment is already cancelled');
       }
-
       if (appointment.status === 'completed') {
         throw new Error('Cannot cancel completed appointment');
       }
@@ -1245,35 +1171,31 @@ class AppointmentService {
         DATABASE_ID,
         APPOINTMENTS_COLLECTION_ID,
         appointmentId,
-        {
-          status: 'cancelled',
-          cancelledBy,
-          cancelReason,
-        }
+        { status: 'cancelled', cancelledBy, cancelReason }
       );
 
       return mapAppointment(document);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Failed to cancel appointment';
       console.error('Error cancelling appointment:', error);
-      throw new Error(error.message || 'Failed to cancel appointment');
+      throw new Error(msg);
     }
   }
 
-  /**
-   * Get upcoming appointments for a doctor
-   */
+  // ── getUpcomingAppointmentsByDoctor ───────────────────────────────────────
+
   async getUpcomingAppointmentsByDoctor(doctorDocumentId: string): Promise<Appointment[]> {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today     = new Date().toISOString().split('T')[0];
       const { start } = this.getDayRange(today);
 
       const response = await databases.listDocuments<AppointmentDocument>(
         DATABASE_ID,
         APPOINTMENTS_COLLECTION_ID,
         [
-          Query.equal('doctorId', doctorDocumentId),
+          Query.equal('doctorId',        doctorDocumentId),
           Query.greaterThanEqual('date', start),
-          Query.notEqual('status', 'cancelled'),
+          Query.notEqual('status',       'cancelled'),
           Query.orderAsc('date'),
         ]
       );
@@ -1285,21 +1207,20 @@ class AppointmentService {
     }
   }
 
-  /**
-   * Get upcoming appointments for a patient
-   */
+  // ── getUpcomingAppointmentsByPatient ──────────────────────────────────────
+
   async getUpcomingAppointmentsByPatient(patientDocumentId: string): Promise<Appointment[]> {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today     = new Date().toISOString().split('T')[0];
       const { start } = this.getDayRange(today);
 
       const response = await databases.listDocuments<AppointmentDocument>(
         DATABASE_ID,
         APPOINTMENTS_COLLECTION_ID,
         [
-          Query.equal('patientId', patientDocumentId),
+          Query.equal('patientId',       patientDocumentId),
           Query.greaterThanEqual('date', start),
-          Query.notEqual('status', 'cancelled'),
+          Query.notEqual('status',       'cancelled'),
           Query.orderAsc('date'),
         ]
       );
@@ -1311,36 +1232,47 @@ class AppointmentService {
     }
   }
 
-  /**
-   * Get available slots for a doctor on a specific date
-   */
+  // ── getAvailableSlots — uses availabilityService.generateTimeSlots ─────────
+  // Correctly skips break window so patient never sees break slots
+
   async getAvailableSlots(doctorDocumentId: string, date: string): Promise<string[]> {
     try {
       const [year, month, day] = date.split('-').map(Number);
-      const appointmentDate = new Date(year, month - 1, day);
-      const dayOfWeek = appointmentDate.getDay();
+      const appointmentDate    = new Date(year, month - 1, day);
+      const dayOfWeek          = appointmentDate.getDay();
 
       const availabilityResponse = await databases.listDocuments(
         DATABASE_ID,
         AVAILABILITY_COLLECTION_ID,
         [
-          Query.equal('doctorId', doctorDocumentId),
+          Query.equal('doctorId',  doctorDocumentId),
           Query.equal('dayOfWeek', dayOfWeek),
           Query.limit(1),
         ]
       );
 
-      if (availabilityResponse.documents.length === 0) {
-        return [];
-      }
+      if (availabilityResponse.documents.length === 0) return [];
 
-      const availability = availabilityResponse.documents[0];
+      const availDoc = availabilityResponse.documents[0];
 
-      const allSlots = this.generateTimeSlotsFromAvailability(
-        availability.startTime,
-        availability.endTime,
-        availability.slotDuration
-      );
+      // ── Fix 1: cast dayOfWeek to DayOfWeek (not just number) ─────────────
+      const availability = {
+        $id:            availDoc.$id,
+        doctorId:       availDoc.doctorId       as string,
+        dayOfWeek:      (availDoc.dayOfWeek as number) as DayOfWeek,
+        startTime:      availDoc.startTime      as string,
+        endTime:        availDoc.endTime        as string,
+        slotDuration:   availDoc.slotDuration   as number,
+        hasBreak:       (availDoc.hasBreak       as boolean | null) ?? false,
+        breakStartTime: (availDoc.breakStartTime as string  | null) ?? null,
+        breakEndTime:   (availDoc.breakEndTime   as string  | null) ?? null,
+        $createdAt:     availDoc.$createdAt,
+        $updatedAt:     availDoc.$updatedAt,
+      };
+
+      const allSlots = availabilityService
+        .generateTimeSlots(availability)
+        .map((slot) => slot.time);
 
       const { start, end } = this.getDayRange(date);
 
@@ -1348,48 +1280,46 @@ class AppointmentService {
         DATABASE_ID,
         APPOINTMENTS_COLLECTION_ID,
         [
-          Query.equal('doctorId', doctorDocumentId),
+          Query.equal('doctorId',        doctorDocumentId),
           Query.greaterThanEqual('date', start),
-          Query.lessThanEqual('date', end),
-          Query.notEqual('status', 'cancelled'),
+          Query.lessThanEqual('date',    end),
+          Query.notEqual('status',       'cancelled'),
         ]
       );
 
-      const bookedTimes = new Set(appointmentsResponse.documents.map((appt) => appt.startTime));
+      const bookedTimes = new Set(
+        appointmentsResponse.documents.map((appt) => appt.startTime)
+      );
 
       return allSlots.filter((slot) => !bookedTimes.has(slot));
+
     } catch (error) {
       console.error('Error getting available slots:', error);
       throw new Error('Failed to get available slots');
     }
   }
 
-  /**
-   * Helper: Convert Auth userId to document $id for doctor
-   */
+  // ── ID helpers ────────────────────────────────────────────────────────────
+
   async doctorUserIdToDocumentId(userId: string): Promise<string> {
     return this.getDoctorDocumentId(userId);
   }
 
-  /**
-   * Helper: Convert Auth userId to document $id for patient
-   */
   async patientUserIdToDocumentId(userId: string): Promise<string> {
     return this.getPatientDocumentId(userId);
   }
 
-  /**
-   * Enrich appointments with patient data
-   */
+  // ── enrichAppointmentsWithPatients ────────────────────────────────────────
+
   private async enrichAppointmentsWithPatients(
     appointments: Appointment[]
   ): Promise<AppointmentWithPatient[]> {
     if (appointments.length === 0) return [];
 
     try {
-      const uniquePatientIds = [...new Set(appointments.map((apt) => apt.patientId))];
-      const patientMap = new Map<string, Patient>();
-      const chunks = this.chunkArray(uniquePatientIds, 100);
+      const uniquePatientIds       = [...new Set(appointments.map((apt) => apt.patientId))];
+      const patientMap             = new Map<string, Patient>();
+      const chunks                 = this.chunkArray(uniquePatientIds, 100);
       const PATIENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_PATIENTS_COLLECTION_ID!;
 
       for (const chunk of chunks) {
@@ -1399,8 +1329,11 @@ class AppointmentService {
           [Query.equal('$id', chunk), Query.limit(100)]
         );
 
-        patientsResponse.documents.forEach((doc: any) => {
-          const patient = patientService.mapPatient(doc);
+        // ── Fix 2: use unknown as intermediate to satisfy strict TypeScript ─
+        patientsResponse.documents.forEach((doc) => {
+          const patient = patientService.mapPatient(
+            doc as unknown as Parameters<typeof patientService.mapPatient>[0]
+          );
           patientMap.set(patient.$id, patient);
         });
       }
@@ -1413,12 +1346,12 @@ class AppointmentService {
           return {
             ...appointment,
             patient: {
-              userId: '',
+              userId:    '',
               firstName: 'Unknown',
-              lastName: 'Patient',
-              fullName: 'Unknown Patient',
-              email: '',
-              phone: undefined,
+              lastName:  'Patient',
+              fullName:  'Unknown Patient',
+              email:     '',
+              phone:     undefined,
             },
           };
         }
@@ -1426,12 +1359,12 @@ class AppointmentService {
         return {
           ...appointment,
           patient: {
-            userId: patient.userId,
+            userId:    patient.userId,
             firstName: patient.firstName,
-            lastName: patient.lastName,
-            fullName: `${patient.firstName} ${patient.lastName}`,
-            email: patient.email,
-            phone: patient.phone,
+            lastName:  patient.lastName,
+            fullName:  `${patient.firstName} ${patient.lastName}`,
+            email:     patient.email,
+            phone:     patient.phone,
           },
         };
       });
@@ -1440,29 +1373,28 @@ class AppointmentService {
       return appointments.map((apt) => ({
         ...apt,
         patient: {
-          userId: '',
+          userId:    '',
           firstName: 'Unknown',
-          lastName: 'Patient',
-          fullName: 'Unknown Patient',
-          email: '',
-          phone: undefined,
+          lastName:  'Patient',
+          fullName:  'Unknown Patient',
+          email:     '',
+          phone:     undefined,
         },
       }));
     }
   }
 
-  /**
-   * Enrich appointments with doctor information
-   */
+  // ── enrichAppointmentsWithDoctors ─────────────────────────────────────────
+
   private async enrichAppointmentsWithDoctors(
     appointments: Appointment[]
   ): Promise<AppointmentWithDoctor[]> {
     if (appointments.length === 0) return [];
 
     try {
-      const uniqueDoctorIds = [...new Set(appointments.map((apt) => apt.doctorId))];
-      const doctorMap = new Map<string, Doctor>();
-      const chunks = this.chunkArray(uniqueDoctorIds, 100);
+      const uniqueDoctorIds       = [...new Set(appointments.map((apt) => apt.doctorId))];
+      const doctorMap             = new Map<string, Doctor>();
+      const chunks                = this.chunkArray(uniqueDoctorIds, 100);
       const DOCTORS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_DOCTORS_COLLECTION_ID!;
 
       for (const chunk of chunks) {
@@ -1472,8 +1404,8 @@ class AppointmentService {
           [Query.equal('$id', chunk), Query.limit(100)]
         );
 
-        doctorsResponse.documents.forEach((doc: any) => {
-          const doctor = doc as Doctor; // Cast directly since we know the structure
+        doctorsResponse.documents.forEach((doc) => {
+          const doctor = doc as unknown as Doctor;
           doctorMap.set(doctor.$id, doctor);
         });
       }
@@ -1486,11 +1418,11 @@ class AppointmentService {
           return {
             ...appointment,
             doctor: {
-              firstName: 'Unknown',
-              lastName: 'Doctor',
-              fullName: 'Unknown Doctor',
+              firstName:      'Unknown',
+              lastName:       'Doctor',
+              fullName:       'Unknown Doctor',
               specialization: 'N/A',
-              city: 'N/A',
+              city:           'N/A',
             },
           };
         }
@@ -1498,13 +1430,13 @@ class AppointmentService {
         return {
           ...appointment,
           doctor: {
-            firstName: doctor.firstName,
-            lastName: doctor.lastName,
-            fullName: `Dr. ${doctor.firstName} ${doctor.lastName}`,
+            firstName:      doctor.firstName,
+            lastName:       doctor.lastName,
+            fullName:       `Dr. ${doctor.firstName} ${doctor.lastName}`,
             specialization: doctor.specialization,
-            city: doctor.city,
-            clinicName: doctor.clinicName,
-            clinicAddress: doctor.clinicAddress,
+            city:           doctor.city,
+            clinicName:     doctor.clinicName,
+            clinicAddress:  doctor.clinicAddress,
           },
         };
       });
@@ -1513,19 +1445,18 @@ class AppointmentService {
       return appointments.map((apt) => ({
         ...apt,
         doctor: {
-          firstName: 'Unknown',
-          lastName: 'Doctor',
-          fullName: 'Unknown Doctor',
+          firstName:      'Unknown',
+          lastName:       'Doctor',
+          fullName:       'Unknown Doctor',
           specialization: 'N/A',
-          city: 'N/A',
+          city:           'N/A',
         },
       }));
     }
   }
 
-  /**
-   * Get upcoming appointments with patient data for a doctor
-   */
+  // ── getUpcomingAppointmentsWithPatient ────────────────────────────────────
+
   async getUpcomingAppointmentsWithPatient(
     doctorDocumentId: string
   ): Promise<AppointmentWithPatient[]> {
@@ -1538,12 +1469,11 @@ class AppointmentService {
     }
   }
 
-  /**
-   * Get appointments with patient data for a doctor (with filters)
-   */
+  // ── getAppointmentsWithPatient ────────────────────────────────────────────
+
   async getAppointmentsWithPatient(
     doctorDocumentId: string,
-    filters?: AppointmentFilters
+    filters?:         AppointmentFilters
   ): Promise<AppointmentWithPatient[]> {
     try {
       const appointments = await this.getAppointmentsByDoctor(doctorDocumentId, filters);
@@ -1554,9 +1484,8 @@ class AppointmentService {
     }
   }
 
-  /**
-   * Get appointments for a patient with doctor information
-   */
+  // ── getAppointmentsByPatientWithDoctor ────────────────────────────────────
+
   async getAppointmentsByPatientWithDoctor(
     patientDocumentId: string
   ): Promise<AppointmentWithDoctor[]> {
