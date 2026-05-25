@@ -35,6 +35,10 @@ import {
   DollarSign,
   Award,
   FileWarning,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Search,
 } from 'lucide-react';
 import type { Doctor } from '@/types/doctor.types';
 
@@ -362,19 +366,26 @@ export default function AdminDoctorsPage() {
     setTimeout(() => setSelectedDoctor(null), 200);
   };
 
+  const verifiedCount   = doctors.filter(d => d.isVerified).length;
+  const unverifiedCount = doctors.filter(d => !d.isVerified).length;
+
   return (
     <div className="space-y-6">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* ── Header banner ── */}
+      <div className="bg-gradient-to-r from-purple-800 to-purple-700 rounded-2xl px-8 py-6 shadow-lg shadow-purple-900/20 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Doctors</h1>
-          <p className="text-gray-500 mt-1">Manage and verify doctor accounts</p>
+          <h1 className="text-3xl font-bold text-white">Doctors</h1>
+          <p className="text-purple-200 mt-1">Manage and verify doctor accounts</p>
         </div>
-        <Button variant="outline" size="sm" disabled={refreshing || loading} onClick={() => load(true)}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+        <button
+          disabled={refreshing || loading}
+          onClick={() => load(true)}
+          className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
-        </Button>
+        </button>
       </div>
 
       {error && (
@@ -384,123 +395,158 @@ export default function AdminDoctorsPage() {
         </Alert>
       )}
 
-      <Card className="border-gray-200 shadow-sm">
-        <CardHeader className="border-b bg-gray-50/60">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Stethoscope className="h-4 w-4 text-blue-600" />
-            All Doctors ({loading ? '…' : doctors.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="space-y-3 p-4">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex items-center gap-4">
-                  <Skeleton className="w-10 h-10 rounded-full" />
-                  <div className="flex-1 space-y-1">
-                    <Skeleton className="h-4 w-40" />
-                    <Skeleton className="h-3 w-28" />
-                  </div>
-                  <Skeleton className="h-8 w-20 rounded" />
-                </div>
-              ))}
+      {/* ── Stats cards ── */}
+      {!loading && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-purple-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+            <div>
+              <Stethoscope className="h-5 w-5 text-purple-400 mb-1" />
+              <p className="text-3xl font-bold text-purple-600">{doctors.length}</p>
+              <p className="text-sm text-slate-500 font-medium">Total Doctors</p>
             </div>
-          ) : doctors.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">No doctors registered yet</div>
-          ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="rounded-2xl bg-purple-50 p-3"><Stethoscope className="h-6 w-6 text-purple-500" /></div>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-emerald-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+            <div>
+              <CheckCircle2 className="h-5 w-5 text-emerald-400 mb-1" />
+              <p className="text-3xl font-bold text-emerald-600">{verifiedCount}</p>
+              <p className="text-sm text-slate-500 font-medium">Verified</p>
+            </div>
+            <div className="rounded-2xl bg-emerald-50 p-3"><CheckCircle2 className="h-6 w-6 text-emerald-500" /></div>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-amber-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+            <div>
+              <Clock className="h-5 w-5 text-amber-400 mb-1" />
+              <p className="text-3xl font-bold text-amber-600">{unverifiedCount}</p>
+              <p className="text-sm text-slate-500 font-medium">Unverified</p>
+            </div>
+            <div className="rounded-2xl bg-amber-50 p-3"><Clock className="h-6 w-6 text-amber-500" /></div>
+          </div>
+        </div>
+      )}
 
-              {/* Table header — now 12 cols: 4 name | 3 spec | 2 city | 1 status | 2 actions */}
-              <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <div className="col-span-4">Doctor</div>
-                <div className="col-span-3">Specialization</div>
-                <div className="col-span-2">City</div>
-                <div className="col-span-1">Status</div>
-                <div className="col-span-2 text-right">Actions</div>
+      {/* ── Doctors table card ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden">
+
+        {/* Card header */}
+        <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3 bg-gradient-to-r from-slate-50 to-white">
+          <div className="rounded-xl bg-purple-100 p-2">
+            <Stethoscope className="h-5 w-5 text-purple-600" />
+          </div>
+          <h2 className="text-lg font-bold text-slate-900">
+            All Doctors ({loading ? '…' : doctors.length})
+          </h2>
+        </div>
+
+        {loading ? (
+          <div className="space-y-3 p-6">
+            {[1,2,3,4].map((i) => (
+              <div key={i} className="flex items-center gap-4">
+                <Skeleton className="w-11 h-11 rounded-2xl" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-44" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+                <Skeleton className="h-7 w-20 rounded-lg" />
               </div>
+            ))}
+          </div>
+        ) : doctors.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Stethoscope className="h-16 w-16 text-slate-200" />
+            <p className="text-lg font-semibold text-slate-400">No doctors found</p>
+            <p className="text-sm text-slate-400">No doctors registered yet</p>
+          </div>
+        ) : (
+          <>
+            {/* Table header */}
+            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <div className="col-span-4">Doctor</div>
+              <div className="col-span-2">Specialization</div>
+              <div className="col-span-2">City</div>
+              <div className="col-span-2">Status</div>
+              <div className="col-span-2 text-right">Actions</div>
+            </div>
 
-              {doctors.map((doctor) => (
-                <div
-                  key={doctor.$id}
-                  className="grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-gray-50 transition-colors"
-                >
-                  {/* Name */}
-                  <div className="col-span-4 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                      {doctor.firstName[0]}{doctor.lastName[0]}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900 text-sm truncate">
-                        Dr. {doctor.firstName} {doctor.lastName}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate">{doctor.email}</p>
-                    </div>
+            {/* Rows */}
+            {doctors.map((doctor) => (
+              <div
+                key={doctor.$id}
+                className="grid grid-cols-12 gap-4 px-6 py-4 items-center border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80 transition-colors"
+              >
+                {/* Doctor */}
+                <div className="col-span-4 flex items-center gap-3">
+                  <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md">
+                    {doctor.firstName[0]}{doctor.lastName[0]}
                   </div>
-
-                  {/* Specialization */}
-                  <div className="col-span-3">
-                    <p className="text-sm text-gray-700 truncate">{doctor.specialization}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate">
+                      Dr. {doctor.firstName} {doctor.lastName}
+                    </p>
+                    <p className="text-xs text-slate-400 truncate">{doctor.email}</p>
                   </div>
+                </div>
 
-                  {/* City */}
-                  <div className="col-span-2">
-                    <p className="text-sm text-gray-600 truncate">{doctor.city}</p>
-                  </div>
+                {/* Specialization */}
+                <div className="col-span-2">
+                  <p className="text-sm text-slate-600 truncate">{doctor.specialization}</p>
+                </div>
 
-                  {/* Verified badge */}
-                  <div className="col-span-1">
-                    {doctor.isVerified ? (
-                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 border gap-1 text-xs">
-                        <BadgeCheck className="h-3 w-3" />
-                        Verified
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-amber-50 text-amber-700 border-amber-200 border text-xs">
-                        Unverified
-                      </Badge>
-                    )}
-                  </div>
+                {/* City */}
+                <div className="col-span-2 flex items-center gap-1.5 text-sm text-slate-600">
+                  <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                  <span className="truncate">{doctor.city}</span>
+                </div>
 
-                  {/* Actions — View Profile + Verify toggle */}
-                  <div className="col-span-2 flex items-center justify-end gap-2">
-                    {/* View Profile button */}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openProfile(doctor)}
-                      className="h-7 px-2 text-xs text-gray-600 hover:text-blue-600 hover:border-blue-300"
-                    >
-                      <Eye className="h-3.5 w-3.5 mr-1" />
-                      View
-                    </Button>
+                {/* Status */}
+                <div className="col-span-2">
+                  {doctor.isVerified ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Verified
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                      <Clock className="h-3.5 w-3.5" /> Unverified
+                    </span>
+                  )}
+                </div>
 
-                    {/* Verify / Unverify */}
-                    <Button
-                      size="sm"
-                      variant={doctor.isVerified ? 'outline' : 'default'}
+                {/* Actions */}
+                <div className="col-span-2 flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => openProfile(doctor)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                  >
+                    <Eye className="h-3.5 w-3.5" /> View
+                  </button>
+
+                  {doctor.isVerified ? (
+                    <button
                       disabled={toggling === doctor.$id}
                       onClick={() => toggleVerify(doctor)}
-                      className={
-                        doctor.isVerified
-                          ? 'border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 h-7 text-xs'
-                          : 'bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-xs'
-                      }
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 text-xs font-medium transition-colors disabled:opacity-40"
                     >
-                      {toggling === doctor.$id
-                        ? '…'
-                        : doctor.isVerified
-                        ? 'Unverify'
-                        : 'Verify'}
-                    </Button>
-                  </div>
+                      <XCircle className="h-3.5 w-3.5" />
+                      {toggling === doctor.$id ? '…' : 'Unverify'}
+                    </button>
+                  ) : (
+                    <button
+                      disabled={toggling === doctor.$id}
+                      onClick={() => toggleVerify(doctor)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors disabled:opacity-40"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {toggling === doctor.$id ? '…' : 'Verify'}
+                    </button>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
 
-      {/* Profile dialog */}
+      {/* Profile dialog — unchanged */}
       <DoctorProfileDialog
         doctor={selectedDoctor}
         open={dialogOpen}

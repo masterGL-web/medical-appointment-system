@@ -26,6 +26,7 @@ function mapDoctor(doc: DoctorDocument): Doctor {
     licenseDocumentId: doc.licenseDocumentId,
     profileImageId: doc.profileImageId,
     isVerified: doc.isVerified,
+    isActivated: doc.isActivated,
     education: doc.education,
     latitude: doc.latitude,
     longitude: doc.longitude,

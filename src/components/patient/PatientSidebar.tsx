@@ -6,89 +6,121 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { NotificationBell } from '@/components/patient/NotificationBell';
+import { motion } from 'framer-motion';
 import {
-  LayoutDashboard,
   Calendar,
   User,
   LogOut,
-  Activity,
+  Stethoscope,
   Search,
 } from 'lucide-react';
 
 interface PatientSidebarProps {
   patientName: string;
-  userId:      string;   // ← NEW: needed for NotificationBell
+  userId:      string;
   onLogout:    () => void;
+  collapsed:   boolean;
+  onToggle:    () => void;
 }
 
 const navigation = [
-  { name: 'Dashboard',       href: '/patient/dashboard',    icon: LayoutDashboard },
-  { name: 'Find Doctors',    href: '/patient/doctors',      icon: Search          },
-  { name: 'My Appointments', href: '/patient/appointments', icon: Calendar        },
-  { name: 'Profile',         href: '/patient/profile',      icon: User            },
+  { name: 'Find Doctors',    href: '/patient/doctors',      icon: Search   },
+  { name: 'My Appointments', href: '/patient/appointments', icon: Calendar },
+  { name: 'Profile',         href: '/patient/profile',      icon: User     },
 ];
 
-export function PatientSidebar({ patientName, userId, onLogout }: PatientSidebarProps) {
+export function PatientSidebar({ patientName, userId, onLogout, collapsed, onToggle }: PatientSidebarProps) {
   const pathname = usePathname();
 
   return (
-    <div className="flex h-full w-64 flex-col bg-white border-r border-gray-200 shadow-sm">
+    <div
+      className={cn(
+        'flex h-full flex-col bg-white border-r border-slate-100 shadow-sm transition-all duration-300 flex-shrink-0',
+        collapsed ? 'w-16' : 'w-64'
+      )}
+    >
 
-      {/* Brand header */}
-      <div className="flex h-16 items-center border-b border-gray-200 px-6">
-        <div className="flex items-center space-x-2">
-          <Activity className="h-6 w-6 text-blue-600" />
-          <span className="text-lg font-semibold text-gray-900">MediCare</span>
+      {/* Brand header — click to toggle */}
+      <div
+        className="flex h-16 items-center border-b border-slate-100 px-3 cursor-pointer select-none"
+        onClick={onToggle}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/20 flex-shrink-0">
+            <Stethoscope className="h-5 w-5 text-white" />
+          </div>
+          {!collapsed && (
+            <span className="text-lg font-bold text-slate-900 whitespace-nowrap overflow-hidden">MediCare</span>
+          )}
         </div>
       </div>
 
       {/* Patient info + notification bell */}
-      <div className="border-b border-gray-200 px-6 py-4">
+      <div className="border-b border-slate-100 px-3 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 flex-shrink-0">
-            <User className="h-5 w-5 text-blue-600" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 flex-shrink-0">
+            <User className="h-5 w-5 text-emerald-600" />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{patientName}</p>
-            <p className="text-xs text-gray-500">Patient</p>
-          </div>
-          {/* Bell sits right-aligned next to the patient name */}
-          <NotificationBell userId={userId} />
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-slate-900 truncate">{patientName}</p>
+              <p className="text-xs text-slate-500">Patient</p>
+            </div>
+          )}
+          {!collapsed && <NotificationBell userId={userId} />}
         </div>
+        {collapsed && (
+          <div className="mt-2 flex justify-center">
+            <NotificationBell userId={userId} />
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3 py-4">
-        {navigation.map((item) => {
+      <nav className="flex-1 px-2 py-4 space-y-1">
+        {navigation.map((item, index) => {
           const isActive = pathname === item.href;
           const Icon     = item.icon;
           return (
-            <Link
+            <motion.div
               key={item.name}
-              href={item.href}
-              className={cn(
-                'flex items-center space-x-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
-                isActive
-                  ? 'bg-blue-50 text-blue-700 shadow-sm'
-                  : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-              )}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3, delay: index * 0.05 }}
             >
-              <Icon className={cn('h-5 w-5', isActive ? 'text-blue-600' : 'text-gray-500')} />
-              <span>{item.name}</span>
-            </Link>
+              <Link
+                href={item.href}
+                className={cn(
+                  'group flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-all duration-200 cursor-pointer rounded-xl',
+                  collapsed ? 'justify-center' : '',
+                  isActive
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30'
+                    : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'
+                )}
+                title={collapsed ? item.name : undefined}
+              >
+                <Icon className={cn('h-5 w-5 flex-shrink-0', isActive ? 'text-white' : 'text-slate-400 group-hover:text-emerald-600')} />
+                {!collapsed && <span>{item.name}</span>}
+              </Link>
+            </motion.div>
           );
         })}
       </nav>
 
       {/* Logout */}
-      <div className="border-t border-gray-200 p-3">
+      <div className="border-t border-slate-100 p-2">
         <Button
           variant="ghost"
-          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
+          className={cn(
+            'w-full text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors',
+            collapsed ? 'justify-center px-0' : 'justify-start gap-3'
+          )}
           onClick={onLogout}
+          title={collapsed ? 'Logout' : undefined}
         >
-          <LogOut className="mr-3 h-5 w-5" />
-          Logout
+          <LogOut className="h-5 w-5 flex-shrink-0" />
+          {!collapsed && 'Logout'}
         </Button>
       </div>
     </div>

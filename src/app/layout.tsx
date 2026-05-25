@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Medical Appointment System",
-  description: "Master 2 Project",
+  title: "MediCare - Medical Appointment System",
+  description: "Book appointments with top-rated doctors. Manage your healthcare journey effortlessly.",
 };
 
 export default function RootLayout({

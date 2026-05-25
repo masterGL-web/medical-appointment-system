@@ -676,12 +676,19 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-6 pb-8">
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Overview of the MediCare platform
-        </p>
+      {/* ── Header banner ── */}
+      <div className="bg-gradient-to-r from-purple-800 to-purple-700 rounded-2xl px-8 py-6 shadow-lg shadow-purple-900/20 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
+          <p className="text-purple-200 mt-1">Overview of the MediCare platform</p>
+        </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+        >
+          <CalendarDays className="h-4 w-4" />
+          Refresh
+        </button>
       </div>
 
       {error && (
@@ -692,60 +699,64 @@ export default function AdminDashboardPage() {
       )}
 
       {/* ── Row 1: 4 stat cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Doctors"
-          value={stats?.totalDoctors}
-          icon={Stethoscope}
-          color="text-blue-600"
-          bg="bg-blue-50"
-          border="border-blue-100"
-          loading={loading}
-        />
-        <StatCard
-          label="Verified Doctors"
-          value={stats?.verifiedDoctors}
-          icon={ShieldCheck}
-          color="text-emerald-600"
-          bg="bg-emerald-50"
-          border="border-emerald-100"
-          loading={loading}
-        />
-        <StatCard
-          label="Total Patients"
-          value={stats?.totalPatients}
-          icon={Users}
-          color="text-violet-600"
-          bg="bg-violet-50"
-          border="border-violet-100"
-          loading={loading}
-        />
-        <StatCard
-          label="Total Appointments"
-          value={stats?.totalAppointments}
-          icon={CalendarDays}
-          color="text-amber-600"
-          bg="bg-amber-50"
-          border="border-amber-100"
-          loading={loading}
-        />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+
+        <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-purple-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+          <div>
+            <Stethoscope className="h-5 w-5 text-purple-400 mb-1" />
+            {loading ? <Skeleton className="h-8 w-12 mt-1" /> : <p className="text-3xl font-bold text-purple-600">{stats?.totalDoctors ?? 0}</p>}
+            <p className="text-sm text-slate-500 font-medium">Total Doctors</p>
+          </div>
+          <div className="rounded-2xl bg-purple-50 p-3 flex-shrink-0">
+            <Stethoscope className="h-6 w-6 text-purple-500" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-emerald-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+          <div>
+            <ShieldCheck className="h-5 w-5 text-emerald-400 mb-1" />
+            {loading ? <Skeleton className="h-8 w-12 mt-1" /> : <p className="text-3xl font-bold text-emerald-600">{stats?.verifiedDoctors ?? 0}</p>}
+            <p className="text-sm text-slate-500 font-medium">Verified Doctors</p>
+          </div>
+          <div className="rounded-2xl bg-emerald-50 p-3 flex-shrink-0">
+            <ShieldCheck className="h-6 w-6 text-emerald-500" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-blue-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+          <div>
+            <Users className="h-5 w-5 text-blue-400 mb-1" />
+            {loading ? <Skeleton className="h-8 w-12 mt-1" /> : <p className="text-3xl font-bold text-blue-600">{stats?.totalPatients ?? 0}</p>}
+            <p className="text-sm text-slate-500 font-medium">Total Patients</p>
+          </div>
+          <div className="rounded-2xl bg-blue-50 p-3 flex-shrink-0">
+            <Users className="h-6 w-6 text-blue-500" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-orange-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+          <div>
+            <CalendarDays className="h-5 w-5 text-orange-400 mb-1" />
+            {loading ? <Skeleton className="h-8 w-12 mt-1" /> : <p className="text-3xl font-bold text-orange-600">{stats?.totalAppointments ?? 0}</p>}
+            <p className="text-sm text-slate-500 font-medium">Total Appointments</p>
+          </div>
+          <div className="rounded-2xl bg-orange-50 p-3 flex-shrink-0">
+            <CalendarDays className="h-6 w-6 text-orange-500" />
+          </div>
+        </div>
+
       </div>
 
       {/* ── Row 2: two pie charts ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
         {/* Doctor verification pie */}
-        <Card className="border-gray-200 shadow-sm">
-          <CardHeader className="border-b bg-gray-50/50 pb-3">
-            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <div className="w-1.5 h-4 bg-emerald-500 rounded-full" />
-              Doctor Verification Status
-            </CardTitle>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Verified vs unverified doctor accounts
-            </p>
-          </CardHeader>
-          <CardContent className="pt-4">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-1 h-6 rounded-full bg-emerald-500 flex-shrink-0" />
+            <p className="text-base font-bold text-slate-800">Doctor Verification Status</p>
+          </div>
+          <p className="text-sm text-slate-500 mb-4">Verified vs unverified doctor accounts</p>
             {loading ? (
               <PieSkeleton />
             ) : doctorPieData.length === 0 ? (
@@ -778,21 +789,15 @@ export default function AdminDashboardPage() {
                 <PieLegend data={doctorPieData} total={stats?.totalDoctors ?? 0} />
               </>
             )}
-          </CardContent>
-        </Card>
+          </div>
 
         {/* Patient status pie */}
-        <Card className="border-gray-200 shadow-sm">
-          <CardHeader className="border-b bg-gray-50/50 pb-3">
-            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <div className="w-1.5 h-4 bg-blue-500 rounded-full" />
-              Patient Status
-            </CardTitle>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Activated vs banned patient accounts
-            </p>
-          </CardHeader>
-          <CardContent className="pt-4">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-1 h-6 rounded-full bg-blue-500 flex-shrink-0" />
+            <p className="text-base font-bold text-slate-800">Patient Status</p>
+          </div>
+          <p className="text-sm text-slate-500 mb-4">Activated vs banned patient accounts</p>
             {loading ? (
               <PieSkeleton />
             ) : patientPieData.length === 0 ? (
@@ -825,22 +830,18 @@ export default function AdminDashboardPage() {
                 <PieLegend data={patientPieData} total={stats?.totalPatients ?? 0} />
               </>
             )}
-          </CardContent>
-        </Card>
+          </div>
       </div>
 
       {/* ── Row 3: full-width bar chart ── */}
-      <Card className="border-gray-200 shadow-sm">
-        <CardHeader className="border-b bg-gray-50/50 pb-3">
-          <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <div className="w-1.5 h-4 bg-amber-500 rounded-full" />
-            Appointments by Status
-          </CardTitle>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Breakdown of all {totalAppts} appointment{totalAppts !== 1 ? 's' : ''} across the platform
-          </p>
-        </CardHeader>
-        <CardContent className="pt-6 pb-2">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-6 hover:shadow-lg transition-shadow">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-1 h-6 rounded-full bg-orange-400 flex-shrink-0" />
+          <p className="text-base font-bold text-slate-800">Appointments by Status</p>
+        </div>
+        <p className="text-sm text-slate-500 mb-4">
+          Breakdown of all {totalAppts} appointment{totalAppts !== 1 ? 's' : ''} across the platform
+        </p>
           {loading ? (
             <BarSkeleton />
           ) : totalAppts === 0 ? (
@@ -876,8 +877,7 @@ export default function AdminDashboardPage() {
               </BarChart>
             </ResponsiveContainer>
           )}
-        </CardContent>
-      </Card>
+        </div>
     </div>
   );
 }

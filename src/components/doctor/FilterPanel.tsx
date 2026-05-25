@@ -2,7 +2,6 @@
 'use client';
 
 import { AppointmentStatus } from '@/types/appointment.types';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -13,7 +12,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Search, X, Filter } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 
 export interface Filters {
   status: AppointmentStatus | 'all';
@@ -37,106 +35,90 @@ export function FilterPanel({
   totalResults,
 }: FilterPanelProps) {
   return (
-    <Card className="border-gray-200 shadow-sm">
-      <CardContent className="p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
-          {/* Search */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search by patient ID or reason..."
-              value={filters.searchQuery}
-              onChange={(e) => onFilterChange({ searchQuery: e.target.value })}
-              className="pl-10"
-            />
-          </div>
-
-          {/* Status Filter */}
-          <Select
-            value={filters.status}
-            onValueChange={(value) =>
-              onFilterChange({ status: value as AppointmentStatus | 'all' })
-            }
-          >
-            <SelectTrigger className="w-full sm:w-40">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="confirmed">Confirmed</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Date Range Filter */}
-          <Select value={filters.dateRange} onValueChange={(value) =>
-  onFilterChange({ dateRange: value as Filters['dateRange'] })
-}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All Time" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Time</SelectItem>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="week">This Week</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-              <SelectItem value="year">Past Year</SelectItem> {/* ADDED */}
-            </SelectContent>
-          </Select>
-
-          {/* Clear Filters */}
-          {hasActiveFilters && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClearFilters}
-              className="flex-shrink-0"
-              title="Clear filters"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-4">
+      <div className="flex flex-col sm:flex-row gap-3 items-center">
+        {/* Search */}
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Search by patient name or reason..."
+            value={filters.searchQuery}
+            onChange={(e) => onFilterChange({ searchQuery: e.target.value })}
+            className="pl-10 h-10 rounded-xl border-slate-200 focus:border-emerald-400 focus:ring-emerald-400"
+          />
         </div>
 
-        {/* Active Filters Display */}
+        {/* Status Filter */}
+        <Select
+          value={filters.status}
+          onValueChange={(value) => onFilterChange({ status: value as AppointmentStatus | 'all' })}
+        >
+          <SelectTrigger className="w-full sm:w-40 h-10 rounded-xl border-slate-200">
+            <SelectValue placeholder="All Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="confirmed">Confirmed</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Date Range Filter */}
+        <Select
+          value={filters.dateRange}
+          onValueChange={(value) => onFilterChange({ dateRange: value as Filters['dateRange'] })}
+        >
+          <SelectTrigger className="w-full sm:w-44 h-10 rounded-xl border-slate-200">
+            <SelectValue placeholder="All Time" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Time</SelectItem>
+            <SelectItem value="today">Today</SelectItem>
+            <SelectItem value="week">This Week</SelectItem>
+            <SelectItem value="month">This Month</SelectItem>
+            <SelectItem value="year">Past Year</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Clear */}
         {hasActiveFilters && (
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            <span className="text-xs text-gray-500 flex items-center gap-1">
-              <Filter className="h-3 w-3" />
-              Active filters:
-            </span>
-            {filters.status !== 'all' && (
-              <Badge variant="secondary" className="gap-1 text-xs">
-                {filters.status}
-                <X
-                  className="h-3 w-3 cursor-pointer hover:text-red-600"
-                  onClick={() => onFilterChange({ status: 'all' })}
-                />
-              </Badge>
-            )}
-            {filters.dateRange !== 'all' && (
-              <Badge variant="secondary" className="gap-1 text-xs">
-                {filters.dateRange}
-                <X
-                  className="h-3 w-3 cursor-pointer hover:text-red-600"
-                  onClick={() => onFilterChange({ dateRange: 'all' })}
-                />
-              </Badge>
-            )}
-            {filters.searchQuery && (
-              <Badge variant="secondary" className="gap-1 text-xs">
-                Search: "{filters.searchQuery.slice(0, 20)}"
-                <X
-                  className="h-3 w-3 cursor-pointer hover:text-red-600"
-                  onClick={() => onFilterChange({ searchQuery: '' })}
-                />
-              </Badge>
-            )}
-          </div>
+          <button
+            onClick={onClearFilters}
+            className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-xl border border-red-200 transition-colors"
+          >
+            <X className="h-3.5 w-3.5" /> Clear
+          </button>
         )}
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Active filter chips */}
+      {hasActiveFilters && (
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          <span className="text-xs text-slate-400 flex items-center gap-1">
+            <Filter className="h-3 w-3" /> Active:
+          </span>
+          {filters.status !== 'all' && (
+            <Badge variant="secondary" className="gap-1 text-xs">
+              {filters.status}
+              <X className="h-3 w-3 cursor-pointer hover:text-red-600" onClick={() => onFilterChange({ status: 'all' })} />
+            </Badge>
+          )}
+          {filters.dateRange !== 'all' && (
+            <Badge variant="secondary" className="gap-1 text-xs">
+              {filters.dateRange}
+              <X className="h-3 w-3 cursor-pointer hover:text-red-600" onClick={() => onFilterChange({ dateRange: 'all' })} />
+            </Badge>
+          )}
+          {filters.searchQuery && (
+            <Badge variant="secondary" className="gap-1 text-xs">
+              "{filters.searchQuery.slice(0, 20)}"
+              <X className="h-3 w-3 cursor-pointer hover:text-red-600" onClick={() => onFilterChange({ searchQuery: '' })} />
+            </Badge>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

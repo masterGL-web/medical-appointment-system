@@ -22,10 +22,13 @@ import {
   RefreshCw,
   Clock,
   CheckCircle,
+  CheckCircle2,
   XCircle,
   Timer,
   ChevronLeft,
   ChevronRight,
+  Users,
+  Stethoscope,
 } from 'lucide-react';
 import type { AppointmentStatus } from '@/types/appointment.types';
 import type { Models } from 'appwrite';
@@ -199,21 +202,20 @@ export default function AdminAppointmentsPage() {
   return (
     <div className="space-y-6">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* ── Header banner ── */}
+      <div className="bg-gradient-to-r from-purple-800 to-purple-700 rounded-2xl px-8 py-6 shadow-lg shadow-purple-900/20 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Appointments</h1>
-          <p className="text-gray-500 mt-1">View all appointments across the platform</p>
+          <h1 className="text-3xl font-bold text-white">Appointments</h1>
+          <p className="text-purple-200 mt-1">View all appointments across the platform</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
+        <button
           disabled={refreshing || loading}
           onClick={() => load(true)}
+          className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
         >
-          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
-        </Button>
+        </button>
       </div>
 
       {error && (
@@ -223,39 +225,61 @@ export default function AdminAppointmentsPage() {
         </Alert>
       )}
 
-      {/* Stats row */}
+      {/* ── Stats cards ── */}
       {!loading && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { label: 'Total',     value: stats.total,     color: 'text-gray-900',    bg: 'bg-gray-50'    },
-            { label: 'Pending',   value: stats.pending,   color: 'text-amber-600',   bg: 'bg-amber-50'   },
-            { label: 'Confirmed', value: stats.confirmed, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-            { label: 'Cancelled', value: stats.cancelled, color: 'text-red-600',     bg: 'bg-red-50'     },
-          ].map((s) => (
-            <Card key={s.label} className="border-gray-200 shadow-sm">
-              <CardContent className={`p-4 text-center ${s.bg} rounded-lg`}>
-                <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-                <p className="text-xs text-gray-500 mt-1">{s.label}</p>
-              </CardContent>
-            </Card>
-          ))}
+          <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-purple-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+            <div>
+              <Calendar className="h-5 w-5 text-purple-400 mb-1" />
+              <p className="text-3xl font-bold text-purple-600">{stats.total}</p>
+              <p className="text-sm text-slate-500 font-medium">Total</p>
+            </div>
+            <div className="rounded-2xl bg-purple-50 p-3"><Calendar className="h-6 w-6 text-purple-500" /></div>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-amber-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+            <div>
+              <Timer className="h-5 w-5 text-amber-400 mb-1" />
+              <p className="text-3xl font-bold text-amber-600">{stats.pending}</p>
+              <p className="text-sm text-slate-500 font-medium">Pending</p>
+            </div>
+            <div className="rounded-2xl bg-amber-50 p-3"><Timer className="h-6 w-6 text-amber-500" /></div>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-emerald-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+            <div>
+              <CheckCircle2 className="h-5 w-5 text-emerald-400 mb-1" />
+              <p className="text-3xl font-bold text-emerald-600">{stats.confirmed}</p>
+              <p className="text-sm text-slate-500 font-medium">Confirmed</p>
+            </div>
+            <div className="rounded-2xl bg-emerald-50 p-3"><CheckCircle2 className="h-6 w-6 text-emerald-500" /></div>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-red-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+            <div>
+              <XCircle className="h-5 w-5 text-red-400 mb-1" />
+              <p className="text-3xl font-bold text-red-500">{stats.cancelled}</p>
+              <p className="text-sm text-slate-500 font-medium">Cancelled</p>
+            </div>
+            <div className="rounded-2xl bg-red-50 p-3"><XCircle className="h-6 w-6 text-red-500" /></div>
+          </div>
         </div>
       )}
 
-      {/* Table card */}
-      <Card className="border-gray-200 shadow-sm">
-        <CardHeader className="border-b bg-gray-50/60 flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Calendar className="h-4 w-4 text-purple-600" />
-            All Appointments ({loading ? '…' : filtered.length})
-          </CardTitle>
+      {/* ── Table card ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden">
+
+        {/* Card header */}
+        <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-purple-100 p-2">
+              <Calendar className="h-5 w-5 text-purple-600" />
+            </div>
+            <h2 className="text-lg font-bold text-slate-900">
+              All Appointments ({loading ? '…' : filtered.length})
+            </h2>
+          </div>
 
           {/* Status filter */}
-          <Select
-            value={statusFilter}
-            onValueChange={(v) => setStatusFilter(v as AppointmentStatus | 'all')}
-          >
-            <SelectTrigger className="w-36 h-8 text-sm">
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as AppointmentStatus | 'all')}>
+            <SelectTrigger className="w-40 h-10 rounded-xl border-slate-200 text-sm">
               <SelectValue placeholder="Filter status" />
             </SelectTrigger>
             <SelectContent>
@@ -266,127 +290,127 @@ export default function AdminAppointmentsPage() {
               <SelectItem value="completed">Completed</SelectItem>
             </SelectContent>
           </Select>
-        </CardHeader>
+        </div>
 
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="space-y-3 p-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-center gap-4">
-                  <Skeleton className="h-4 w-36" />
-                  <Skeleton className="h-4 w-36" />
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-6 w-24 rounded-full ml-auto" />
-                </div>
-              ))}
-            </div>
-          ) : slice.length === 0 ? (
-            <div className="text-center py-14">
-              <Calendar className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">No appointments found</p>
-            </div>
-          ) : (
-            <>
-              {/* Table header */}
-              <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 border-b text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <div className="col-span-3">Patient</div>
-                <div className="col-span-3">Doctor</div>
-                <div className="col-span-2">Date</div>
-                <div className="col-span-2">Time</div>
-                <div className="col-span-2 text-right">Status</div>
+        {loading ? (
+          <div className="space-y-3 p-6">
+            {[1,2,3,4,5].map((i) => (
+              <div key={i} className="flex items-center gap-4">
+                <Skeleton className="h-11 w-11 rounded-2xl flex-shrink-0" />
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-4 w-24 ml-auto" />
+                <Skeleton className="h-6 w-24 rounded-full" />
               </div>
+            ))}
+          </div>
+        ) : slice.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Calendar className="h-16 w-16 text-slate-200" />
+            <p className="text-lg font-semibold text-slate-400">No appointments found</p>
+            <p className="text-sm text-slate-400">
+              {statusFilter !== 'all' ? `No ${statusFilter} appointments` : 'No appointments yet'}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Table header */}
+            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <div className="col-span-3">Patient</div>
+              <div className="col-span-3">Doctor</div>
+              <div className="col-span-2">Date</div>
+              <div className="col-span-2">Time</div>
+              <div className="col-span-2 text-right">Status</div>
+            </div>
 
-              {/* Rows */}
-              <div className="divide-y divide-gray-100">
-                {slice.map((appt) => {
-                  const cfg  = STATUS_CONFIG[appt.status];
-                  const Icon = cfg.icon;
-                  return (
-                    <div
-                      key={appt.$id}
-                      className="grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-gray-50 transition-colors"
-                    >
-                      {/* Patient */}
-                      <div className="col-span-3 flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 text-xs font-semibold flex-shrink-0">
-                          {appt.patientName.charAt(0)}
-                        </div>
-                        <p className="text-sm text-gray-900 font-medium truncate">
-                          {appt.patientName}
-                        </p>
-                      </div>
-
-                      {/* Doctor */}
-                      <div className="col-span-3 flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-semibold flex-shrink-0">
-                          {appt.doctorName.charAt(3)}
-                        </div>
-                        <p className="text-sm text-gray-700 truncate">{appt.doctorName}</p>
-                      </div>
-
-                      {/* Date */}
-                      <div className="col-span-2">
-                        <span className="flex items-center gap-1 text-sm text-gray-600">
-                          <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-                          {formatDate(appt.date)}
-                        </span>
-                      </div>
-
-                      {/* Time */}
-                      <div className="col-span-2">
-                        <span className="flex items-center gap-1 text-sm text-gray-600">
-                          <Clock className="h-3.5 w-3.5 flex-shrink-0" />
-                          {formatTime(appt.startTime)}
-                        </span>
-                      </div>
-
-                      {/* Status */}
-                      <div className="col-span-2 flex justify-end">
-                        <Badge className={`${cfg.className} border gap-1.5 font-medium`}>
-                          <Icon className="h-3.5 w-3.5" />
-                          {cfg.label}
-                        </Badge>
-                      </div>
+            {/* Rows */}
+            {slice.map((appt) => {
+              const cfg  = STATUS_CONFIG[appt.status];
+              const Icon = cfg.icon;
+              const patientInitials = appt.patientName.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+              const doctorInitials  = appt.doctorName.replace('Dr. ', '').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+              return (
+                <div
+                  key={appt.$id}
+                  className="grid grid-cols-12 gap-4 px-6 py-4 items-center border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80 transition-colors"
+                >
+                  {/* Patient */}
+                  <div className="col-span-3 flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md">
+                      {patientInitials}
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate">{appt.patientName}</p>
+                      <p className="text-xs text-slate-400">Patient</p>
+                    </div>
+                  </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-                  <p className="text-sm text-gray-500">
-                    Page {safePage} of {totalPages} — {filtered.length} appointments
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={safePage <= 1}
-                      onClick={() => setPage((p) => p - 1)}
-                      className="h-8 px-3"
-                    >
-                      <ChevronLeft className="h-4 w-4 mr-1" />
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={safePage >= totalPages}
-                      onClick={() => setPage((p) => p + 1)}
-                      className="h-8 px-3"
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
+                  {/* Doctor */}
+                  <div className="col-span-3 flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md">
+                      {doctorInitials}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate">{appt.doctorName}</p>
+                      <p className="text-xs text-slate-400">Doctor</p>
+                    </div>
+                  </div>
+
+                  {/* Date */}
+                  <div className="col-span-2">
+                    <span className="flex items-center gap-1.5 text-sm text-slate-600">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {formatDate(appt.date)}
+                    </span>
+                  </div>
+
+                  {/* Time */}
+                  <div className="col-span-2">
+                    <span className="flex items-center gap-1.5 text-sm text-slate-600">
+                      <Clock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {formatTime(appt.startTime)}
+                    </span>
+                  </div>
+
+                  {/* Status */}
+                  <div className="col-span-2 flex justify-end">
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${cfg.className}`}>
+                      <Icon className="h-3.5 w-3.5" />
+                      {cfg.label}
+                    </span>
                   </div>
                 </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+              );
+            })}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                <p className="text-sm text-slate-500">
+                  Page {safePage} of {totalPages} — {filtered.length} appointments
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={safePage <= 1}
+                    onClick={() => setPage((p) => p - 1)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                  </button>
+                  <button
+                    disabled={safePage >= totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
+
 }

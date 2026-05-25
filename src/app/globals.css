@@ -123,3 +123,6 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Hide scrollbar while keeping scroll functionality */
+[style*='scrollbar-width: none']::-webkit-scrollbar { display: none; }

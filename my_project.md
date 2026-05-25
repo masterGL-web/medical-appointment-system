@@ -1,10 +1,614 @@
-# My Appointments - Complete Technical Reference
+# MediCare — Healthcare Appointment Management Platform
 
-**Project Name**: My Appointments  
-**Type**: Full-Stack Healthcare Appointment Platform  
-**Status**: Production-Ready  
-**Last Updated**: April 15, 2026  
-**Tech Stack**: Next.js 14 • TypeScript • Tailwind CSS v4 • Appwrite • React Leaflet  
+> **Quick Summary**: A full-stack healthcare appointment booking platform connecting patients with doctors in Algeria. Built with Next.js 14, Appwrite (BaaS), TypeScript, and Tailwind CSS. Enables role-based dashboards, real-time availability management, email verification, geolocation-based search, and an admin panel for oversight.
+
+---
+
+## Table of Contents
+
+1. [Executive Summary (TL;DR)](#executive-summary-tldr)
+2. [Project Overview](#project-overview)
+3. [Core Concept](#core-concept)
+4. [Project Structure](#project-structure)
+5. [Architecture & Logic](#architecture--logic)
+6. [Key Components](#key-components)
+7. [Technology Stack](#technology-stack)
+8. [Getting Started](#getting-started)
+9. [Core Principles](#core-principles)
+10. [Common Tasks & Troubleshooting](#common-tasks--troubleshooting)
+
+---
+
+## Executive Summary (TL;DR)
+
+| Aspect | Details |
+|--------|---------|
+| **Purpose** | Connect patients with qualified doctors for instant appointment booking |
+| **Problem Solved** | Healthcare scheduling is fragmented (phone calls, manual coordination, inflexible slots) |
+| **Innovation** | **Availability Templates** — doctors define once, slots generate on-demand; **Email Activation** — required account verification |
+| **User Roles** | **Patient** (search, book, manage) • **Doctor** (availability, appointments) • **Admin** (oversight, verification) |
+| **Architecture** | Next.js 14 → Service Layer → Appwrite SDK → NoSQL Database |
+| **Auth Model** | Appwrite sessions (patient/doctor roles) + email verification + activation flags |
+| **Key Collections** | 6 Appwrite collections: doctors, patients, appointments, availability, activations, notifications |
+| **Deployment** | Next.js (SSR) + Appwrite (self-hosted/cloud) |
+| **Performance** | On-demand slot generation (<100ms), virtual list rendering, optimized Appwrite queries |
+
+---
+
+## Project Overview
+
+## Project Overview
+
+### What It Does
+
+**MediCare** is a healthcare appointment management system designed for the Algerian medical ecosystem. It eliminates the fragmented, phone-call-heavy process by digitizing the entire workflow:
+
+- **Patients** → Search doctors by specialization/location → View real-time availability → Book appointments instantly → Manage appointments
+- **Doctors** → Define weekly availability once → View all bookings → Confirm/cancel appointments → Manage patient interactions
+- **Admins** → Verify doctors before visibility → Manage bans for no-shows → Monitor platform activity
+
+### Why It Exists
+
+Traditional healthcare scheduling suffers from:
+- **Inefficiency**: Patients call clinics, get voicemails, wait days for callbacks
+- **Inflexibility**: Doctors manually manage calendars and handle conflicts
+- **Poor UX**: Limited visibility into availability; no real-time updates
+- **Scalability Issues**: Pre-generated slots waste storage; scheduling changes require batch updates
+
+### The Solution
+
+MediCare solves this through:
+
+1. **Availability Templates** — Doctors define their weekly schedule once (e.g., "Mon-Fri 9am-5pm, 30-min slots")
+2. **On-Demand Slot Generation** — Slots are generated dynamically when patients book, filtered by real conflicts
+3. **Real-Time Accuracy** — Availability reflects actual bookings immediately
+4. **Email Verification** — All new accounts require email validation
+5. **Geographic Relevance** — City-based search, geolocation mapping, proximity filtering
+6. **No-Show Accountability** — Automatic banning for repeated no-shows (3+ temporary, 5+ permanent)
+
+---
+
+## Core Concept
+
+### The Problem: Pre-Generated Slots
+
+Traditional systems pre-generate all future slots:
+
+```
+Doctor registers
+    ↓
+System generates 1000 slots (3 months × daily slots × 10 doctors)
+    ↓
+PROBLEMS:
+  • Scalability: exponential growth with doctors
+  • Inflexibility: doctor changes hours → regenerate everything
+  • Wasteful: most slots never booked
+  • Batch jobs: poor UX, delayed updates
+```
+
+### Our Solution: Template + On-Demand Generation
+
+```
+Doctor creates availability ONCE
+    │
+    ├─ Monday: 09:00-17:00 (30-min slots)
+    ├─ Tuesday: 09:00-17:00 (30-min slots)
+    ├─ Wednesday: OFF
+    └─ ... (7 days/week)
+    
+Patient books on April 15 (Monday)
+    │
+    ├─ Query: availability for Monday
+    ├─ Generate: ["09:00", "09:30", "10:00", ..., "16:30"]
+    ├─ Filter: remove booked times
+    ├─ Display: 12 available slots
+    └─ Patient picks 10:30
+```
+
+**Benefits**:
+| Benefit | Impact |
+|---------|--------|
+| **No Pre-Generation** | Support unlimited dates without upfront computation |
+| **Flexible Updates** | Doctor changes hours → instantly applies to all future dates |
+| **Instant Response** | Generate slots on-the-fly (<100ms) vs. waiting for batch jobs |
+| **Lean Storage** | ~7 records/doctor vs. 1000+ pre-generated slots |
+| **Real-Time Accuracy** | Availability reflects actual bookings immediately |
+
+### Key Workflows
+
+#### Workflow 1: User Registration & Activation
+
+```
+User registers (email + password)
+    ↓
+Profile created (inactive)
+    ↓
+Activation email sent (6-digit code, valid 24h)
+    ↓
+User enters code
+    ↓
+Account activated → Redirected to role-specific dashboard
+    ↓
+On every login: check activation + ban status
+```
+
+#### Workflow 2: Appointment Booking
+
+```
+Patient searches doctors (by city/specialization/name)
+    ↓
+Views doctor profiles + map location
+    ↓
+Selects doctor → Picks date/time from availability
+    ↓
+Appointment created (status: pending)
+    ↓
+Doctor confirms → Appointment confirmed
+    ↓
+Notifications sent to both parties
+```
+
+#### Workflow 3: No-Show & Auto-Ban
+
+```
+Patient misses appointment
+    ↓
+Marked as no-show → noShowCount incremented
+    ↓
+Count == 3 → Temporary ban (7 days)
+    ↓
+Count == 5 → Permanent ban
+    ↓
+Banned patient → Redirected to /banned on login
+    ↓
+Admin can manually ban/unban (resets noShowCount)
+```
+
+---
+
+## Project Structure
+
+```
+my-appointments/
+├── public/                          # Static assets
+├── src/
+│   ├── app/                         # Next.js App Router pages
+│   │   ├── page.tsx                 # Landing page (public)
+│   │   ├── layout.tsx               # Root layout (Inter font, Toaster)
+│   │   ├── globals.css              # Global styles + Tailwind
+│   │   ├── active/[code]/          # Account activation page
+│   │   ├── auth/
+│   │   │   ├── login/              # Login form
+│   │   │   ├── register/           # Registration (patient/doctor)
+│   │   │   ├── check-email/        # "Check your email" prompt
+│   │   │   └── verify/             # Email verification handler
+│   │   ├── patient/                 # Patient dashboard (protected)
+│   │   │   ├── layout.tsx          # Patient layout + sidebar
+│   │   │   ├── dashboard/          # Patient overview
+│   │   │   ├── appointments/       # Appointment list
+│   │   │   ├── book/               # Book new appointment
+│   │   │   ├── doctors/            # Doctor search + map
+│   │   │   └── profile/            # Patient profile edit
+│   │   ├── doctor/                  # Doctor dashboard (protected)
+│   │   │   ├── layout.tsx          # Doctor layout + sidebar
+│   │   │   ├── dashboard/          # Doctor overview + stats
+│   │   │   ├── appointments/       # Appointment management
+│   │   │   ├── availability/       # Weekly schedule config
+│   │   │   ├── patients/           # Patient list
+│   │   │   ├── profile/            # Doctor profile edit
+│   │   │   ├── reports/            # Reports/analytics
+│   │   │   └── settings/           # Doctor settings
+│   │   ├── admin/                   # Admin panel (protected)
+│   │   │   ├── layout.tsx          # Admin layout + sidebar
+│   │   │   ├── dashboard/          # Admin overview
+│   │   │   ├── doctors/            # Doctor verification
+│   │   │   ├── patients/           # Patient management
+│   │   │   └── appointments/       # All appointments
+│   │   ├── api/                     # Server-side API routes
+│   │   │   ├── handle-noshow/      # No-show counter increment
+│   │   │   ├── notify-appointment/ # Appointment notifications
+│   │   │   ├── send-activation/    # Send activation email
+│   │   │   └── delete-stuck-index/ # DB maintenance utility
+│   │   ├── banned/                  # Banned patient page
+│   │   └── please-activate/        # Inactive account page
+│   │
+│   ├── components/
+│   │   ├── landing/                 # Public landing page sections
+│   │   │   ├── Navbar.tsx          # Sticky nav with smooth scroll
+│   │   │   ├── Hero.tsx            # Hero section with floating elements
+│   │   │   ├── SearchSection.tsx    # Doctor search form
+│   │   │   ├── StatsSection.tsx    # Platform statistics
+│   │   │   ├── WhyChooseUs.tsx     # Benefits/features (id="services")
+│   │   │   ├── FeaturedDoctors.tsx # Real doctors from DB (id="doctors")
+│   │   │   ├── Testimonials.tsx    # Patient reviews (id="about")
+│   │   │   ├── FaqSection.tsx      # FAQ accordion
+│   │   │   └── Footer.tsx          # Footer with links (id="contact")
+│   │   ├── doctor/                  # Doctor dashboard components
+│   │   │   ├── DoctorSidebar.tsx   # Navigation sidebar
+│   │   │   ├── DashboardStats.tsx  # Statistics cards
+│   │   │   ├── AppointmentsTable.tsx # Appointments data table
+│   │   │   ├── AppointmentRow.tsx  # Single appointment row (actions)
+│   │   │   ├── TodaySchedule.tsx   # Today's schedule view
+│   │   │   ├── QuickActions.tsx    # Quick action buttons
+│   │   │   ├── FilterPanel.tsx     # Appointment filters
+│   │   │   └── PaginationControls.tsx # Table pagination
+│   │   ├── patient/                 # Patient dashboard components
+│   │   │   ├── PatientSidebar.tsx  # Navigation sidebar
+│   │   │   ├── DoctorCard.tsx      # Doctor search result card
+│   │   │   ├── DoctorsMap.tsx      # Leaflet map with doctor markers
+│   │   │   └── NotificationBell.tsx # Notification dropdown
+│   │   ├── search/                  # Shared search components
+│   │   └── ui/                      # shadcn/ui primitives (20 components)
+│   │       ├── button.tsx, card.tsx, badge.tsx, input.tsx,
+│   │       ├── select.tsx, dialog.tsx, form.tsx, tabs.tsx,
+│   │       ├── calendar.tsx, dropdown-menu.tsx, alert-dialog.tsx,
+│   │       ├── popover.tsx, scroll-area.tsx, separator.tsx,
+│   │       ├── skeleton.tsx, switch.tsx, textarea.tsx,
+│   │       ├── label.tsx, alert.tsx, sonner.tsx
+│   │
+│   ├── services/                    # Business logic layer (singleton classes)
+│   │   ├── doctor.service.ts       # Doctor CRUD, search, file upload
+│   │   ├── patient.service.ts      # Patient CRUD operations
+│   │   ├── appointment.service.ts  # Appointment lifecycle management
+│   │   ├── availability.service.ts # Doctor schedule/slot generation
+│   │   ├── activation.service.ts   # Account activation flow
+│   │   ├── notification.service.ts # In-app notification CRUD
+│   │   ├── noshow.service.ts       # Ban checking and management
+│   │   └── email.service.ts        # Gmail SMTP activation emails
+│   │
+│   ├── types/                       # TypeScript type definitions
+│   │   ├── doctor.types.ts         # Doctor + DTOs + geolocation
+│   │   ├── patient.types.ts        # Patient + ban types + DTOs
+│   │   ├── appointment.types.ts    # Appointment + status + DTOs
+│   │   ├── availability.types.ts   # Availability + time slots + days
+│   │   └── activation.types.ts     # Activation + validation result
+│   │
+│   ├── lib/
+│   │   ├── appwrite.ts             # Appwrite client init (Client, Account, DB, Storage)
+│   │   ├── utils.ts                # cn() utility (clsx + tailwind-merge)
+│   │   ├── crypto-code.ts          # Activation code generation
+│   │   ├── geolocation.ts          # Browser geolocation + Haversine distance
+│   │   └── hooks/
+│   │       ├── useAuth.ts          # Auth state + role guard + ban/activation guards
+│   │       ├── useAdminAuth.ts     # Admin-specific auth check
+│   │       └── useDoctorAvailability.ts # Doctor schedule state management
+│   │
+│   └── constants/
+│       └── algeria-cities.ts       # 58 Algerian wilayas (city list)
+│
+├── .env.local                       # Environment variables (Appwrite, Gmail)
+├── next.config.mjs                  # Next.js config + Appwrite image domain
+├── tailwind.config.ts               # Tailwind CSS v4 config
+├── tsconfig.json                    # TypeScript config
+├── components.json                  # shadcn/ui config
+├── eslint.config.mjs                # ESLint flat config
+└── package.json                     # Dependencies and scripts
+```
+
+---
+
+## Architecture & Logic
+
+### High-Level Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                         CLIENT (Browser)                         │
+│                                                                  │
+│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────────┐   │
+│  │ Landing Page│  │ Patient Dash │  │ Doctor Dash           │   │
+│  │ (public)    │  │ /patient/*   │  │ /doctor/*             │   │
+│  └─────────────┘  └──────────────┘  └──────────────────────┘   │
+│                                                                  │
+│  ┌──────────────┐  ┌──────────────────────────────────────────┐ │
+│  │ Admin Panel  │  │         Shared Hooks                      │ │
+│  │ /admin/*     │  │  useAuth()  useAdminAuth()               │ │
+│  └──────────────┘  │  useDoctorAvailability()                 │ │
+│                    └──────────────────────────────────────────┘ │
+│                             │                                    │
+│                    ┌────────▼────────┐                          │
+│                    │  Service Layer  │                          │
+│                    │  (singleton     │                          │
+│                    │   classes)      │                          │
+│                    └────────┬────────┘                          │
+│                             │                                    │
+│                    ┌────────▼────────┐                          │
+│                    │  Appwrite SDK   │                          │
+│                    │  (client-side)  │                          │
+│                    └────────┬────────┘                          │
+└─────────────────────────────┼──────────────────────────────────┘
+                              │
+                    ┌─────────▼─────────┐
+                    │   Appwrite Cloud   │
+                    │   (BaaS)           │
+                    │                    │
+                    │  • Auth            │
+                    │  • Databases       │
+                    │  • Storage         │
+                    │  • (fra.cloud)     │
+                    └───────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│                    SERVER-SIDE (API Routes)                       │
+│                                                                  │
+│  /api/handle-noshow      → node-appwrite SDK (server key)      │
+│  /api/notify-appointment → node-appwrite SDK                    │
+│  /api/send-activation    → nodemailer (Gmail SMTP)             │
+│  /api/delete-stuck-index → DB maintenance                      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Authentication & Authorization Flow
+
+```
+useAuth(expectedRole?)  ─── called in every protected layout
+    │
+    ├── account.get() → fetch current Appwrite session
+    │
+    ├── Look up patient/doctor profile by userId
+    │
+    ├── Guard 1: isActivated check
+    │   └── NOT activated → delete session → redirect /please-activate
+    │
+    ├── Guard 2: ban check (patients only)
+    │   └── Banned → redirect /banned (session kept for info display)
+    │
+    ├── Role mismatch check
+    │   └── expectedRole !== actual → throw error → redirect /
+    │
+    └── All checks pass → set auth state → render dashboard
+```
+
+### Data Flow: Appointment Booking
+
+```
+Patient selects doctor
+    │
+    ├── Doctor's availability loaded (availabilityService)
+    │   └── Weekly schedule → time slots generated (with break handling)
+    │
+    ├── Patient picks date + time slot
+    │   └── Slot availability checked against existing appointments
+    │
+    ├── Appointment created (status: "pending")
+    │   └── appointmentService.createAppointment()
+    │
+    ├── Doctor sees new appointment in dashboard
+    │   └── Doctor confirms → status: "confirmed"
+    │       └── Notification created for patient
+    │
+    └── Appointment lifecycle:
+        ├── completed → after date/time passes
+        ├── cancelled → by either party (cancelReason + cancelledBy recorded)
+        └── no-show → /api/handle-noshow increments counter
+            └── Auto-ban threshold check
+```
+
+### Database Collections (Appwrite)
+
+| Collection | Key Fields | Purpose |
+|------------|-----------|---------|
+| **Doctors** | userId, firstName, lastName, specialization, city, isVerified, profileImageId, latitude, longitude | Doctor profiles with geolocation |
+| **Patients** | userId, firstName, lastName, dateOfBirth, isActivated, noShowCount, banStatus, banUntil | Patient profiles with ban tracking |
+| **Appointments** | patientId, doctorId, date, startTime, endTime, status, cancelReason, cancelledBy | Appointment records |
+| **Availability** | doctorId, dayOfWeek, startTime, endTime, slotDuration, hasBreak, breakStartTime, breakEndTime | Doctor weekly schedules |
+| **Activations** | code, email, role, userId, profileId, expiresAt, status | Email verification tokens |
+| **Notifications** | userId, title, message, type, read, link | In-app notification system |
+
+---
+
+## Key Components
+
+### Service Layer
+
+Each service is a singleton class exported as a single instance. All follow the same pattern:
+- **Mapper function**: converts raw Appwrite document → typed domain model
+- **CRUD methods**: create, read, update, delete
+- **Query methods**: search, filter, list with Appwrite Query builders
+- **Error handling**: try/catch with console.error + throw
+
+| Service | Key Methods | Notes |
+|---------|-------------|-------|
+| `doctorService` | `getVerifiedDoctors()`, `searchDoctors()`, `searchSpecializations()`, `getFilePreview()`, `uploadFile()` | Only verified doctors appear in search; images served from Appwrite Storage |
+| `patientService` | `createPatient()`, `getPatientByUserId()`, `updatePatient()` | Used by appointment service for joins |
+| `appointmentService` | `createAppointment()`, `confirmAppointment()`, `cancelAppointment()`, `getDoctorAppointments()`, `getPatientAppointments()` | Full lifecycle management |
+| `availabilityService` | `getDoctorAvailability()`, `bulkSetAvailability()`, `generateTimeSlots()`, `deleteAvailability()` | Handles break periods, slot duration, day-of-week scheduling |
+| `activationService` | `createActivation()`, `validateActivation()`, `markAsUsed()` | 24-hour expiry, single-use codes |
+| `notificationService` | `createNotification()`, `getUserNotifications()`, `markAsRead()`, `markAllAsRead()` | Types: appointment_confirmed, appointment_cancelled |
+| `noShowService` | `checkIfBanned()`, `applyBan()`, `removeBan()` | Auto-lifts expired temporary bans; removeBan resets noShowCount |
+| `emailService` | `sendActivationEmail()` | Server-only; uses nodemailer + Gmail SMTP |
+
+### Custom Hooks
+
+| Hook | Purpose | Used By |
+|------|---------|---------|
+| `useAuth(role?)` | Auth state, role guard, activation/ban checks | All protected layouts |
+| `useAdminAuth()` | Admin-specific session validation | Admin layout |
+| `useDoctorAvailability()` | Weekly schedule state management (load, update, save) | Doctor availability page |
+
+### Landing Page Sections
+
+The public landing page (`/`) is composed of 9 modular components:
+
+| Component | Section ID | Description |
+|-----------|-----------|-------------|
+| `Navbar` | — | Sticky header with smooth-scroll nav links, sign-in/register buttons, mobile menu |
+| `Hero` | — | Headline, description, dual CTAs, floating animated badges |
+| `SearchSection` | — | Specialty/location search form with popular tags |
+| `StatsSection` | — | Animated metric cards (patients, satisfaction, doctors, support) |
+| `WhyChooseUs` | `#services` | Benefits grid with icons and descriptions |
+| `FeaturedDoctors` | `#doctors` | Real verified doctors from Appwrite DB with profile images |
+| `Testimonials` | `#about` | Patient review cards with star ratings |
+| `FaqSection` | — | Collapsible FAQ accordion |
+| `Footer` | `#contact` | Navigation links, contact info, social media, copyright |
+
+**Navbar scroll targets:**
+- Home → scroll to top
+- Doctors → `#doctors` (FeaturedDoctors)
+- Services → `#services` (WhyChooseUs)
+- About → `#about` (Testimonials)
+- Contact → `#contact` (Footer)
+
+### UI Component Library (shadcn/ui)
+
+20 pre-built components in `src/components/ui/`, built on Radix UI primitives with Tailwind styling. Key frequently used: `Button`, `Card`, `Badge`, `Input`, `Select`, `Dialog`, `Form`, `Calendar`, `Tabs`.
+
+---
+
+## Technology Stack
+
+| Layer | Technology | Version | Purpose |
+|-------|-----------|---------|---------|
+| **Framework** | Next.js (App Router) | 14.2.3 | SSR, routing, API routes |
+| **Language** | TypeScript | ^5 | Type safety |
+| **Styling** | Tailwind CSS | ^4 | Utility-first CSS |
+| **UI Components** | shadcn/ui (Radix UI) | ^1.4.3 | Accessible component primitives |
+| **Animation** | Framer Motion | ^12.36 | Scroll animations, transitions |
+| **Icons** | Lucide React | ^0.563 | Icon library |
+| **BaaS** | Appwrite | ^22.0.0 | Auth, DB, Storage (client SDK) |
+| **BaaS (server)** | node-appwrite | ^24.0.0 | Server-side DB operations |
+| **Forms** | React Hook Form + Zod | ^7.71 / ^4.3 | Form validation |
+| **Email** | Nodemailer | ^8.0.5 | Gmail SMTP for activation emails |
+| **Maps** | React Leaflet + Leaflet | ^4.2.1 / ^1.9.4 | Doctor location maps |
+| **Charts** | Recharts | ^3.8.1 | Admin/doctor analytics |
+| **Dates** | date-fns | ^4.1.0 | Date formatting/manipulation |
+| **Notifications** | Sonner | ^2.0.7 | Toast notifications |
+| **Virtualization** | @tanstack/react-virtual | ^3.13 | Performance for large lists |
+| **Utilities** | clsx + tailwind-merge | ^2.1 / ^3.4 | Class name utilities |
+
+### Environment Variables (`.env.local`)
+
+```bash
+# Appwrite
+NEXT_PUBLIC_APPWRITE_ENDPOINT=https://fra.cloud.appwrite.io/v1
+NEXT_PUBLIC_APPWRITE_PROJECT_ID=<project-id>
+NEXT_PUBLIC_APPWRITE_DATABASE_ID=<database-id>
+NEXT_PUBLIC_APPWRITE_DOCTORS_COLLECTION_ID=<collection-id>
+NEXT_PUBLIC_APPWRITE_PATIENTS_COLLECTION_ID=<collection-id>
+NEXT_PUBLIC_APPWRITE_APPOINTMENTS_COLLECTION_ID=<collection-id>
+NEXT_PUBLIC_APPWRITE_AVAILABILITY_COLLECTION_ID=<collection-id>
+NEXT_PUBLIC_APPWRITE_ACTIVATIONS_COLLECTION_ID=<collection-id>
+NEXT_PUBLIC_APPWRITE_NOTIFICATIONS_COLLECTION_ID=<collection-id>
+NEXT_PUBLIC_APPWRITE_STORAGE_BUCKET_ID=<bucket-id>
+
+# Email
+GMAIL_USER=<gmail-address>
+GMAIL_APP_PASSWORD=<app-password>
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- npm or yarn
+- Appwrite Cloud account (or self-hosted instance)
+- Gmail account with App Password (for activation emails)
+
+### Setup
+
+```bash
+# 1. Clone and install
+git clone <repo-url>
+cd my-appointments
+npm install
+
+# 2. Configure environment
+cp .env.example .env.local
+# Fill in all variables from the Environment Variables section above
+
+# 3. Set up Appwrite
+# - Create project at https://cloud.appwrite.io
+# - Create database with 6 collections (see Database Collections table)
+# - Create storage bucket for doctor profile images
+# - Add all collection IDs to .env.local
+
+# 4. Run development server
+npm run dev
+# → http://localhost:3000
+
+# 5. Build for production
+npm run build
+npm start
+```
+
+### Appwrite Collection Setup
+
+Each collection needs specific attributes and indexes:
+
+**Doctors collection:**
+- Attributes: userId (string), firstName (string), lastName (string), email (string), phone (string), specialization (string), licenseNumber (string), yearsOfExperience (integer), bio (string), clinicName (string), clinicAddress (string), city (string), country (string), consultationFee (integer), licenseDocumentId (string), profileImageId (string), isVerified (boolean), isActivated (boolean), education (string), latitude (float), longitude (float)
+- Indexes: userId (unique), isVerified, city, specialization, firstName (fulltext), lastName (fulltext), specialization (fulltext)
+
+**Patients collection:**
+- Attributes: userId (string), firstName (string), lastName (string), email (string), phone (string), dateOfBirth (string), gender (string), medicalHistory (string), address (string), city (string), isActivated (boolean), noShowCount (integer), banStatus (string), banUntil (string), banReason (string)
+- Indexes: userId (unique)
+
+**Appointments collection:**
+- Attributes: patientId (string), doctorId (string), availabilityId (string), date (string), startTime (string), endTime (string), status (string), reason (string), cancelReason (string), cancelledBy (string)
+- Indexes: doctorId, patientId, status, date
+
+**Availability collection:**
+- Attributes: doctorId (string), dayOfWeek (integer), startTime (string), endTime (string), slotDuration (integer), hasBreak (boolean), breakStartTime (string), breakEndTime (string)
+- Indexes: doctorId
+
+---
+
+## Core Principles
+
+### 1. Client-First Architecture
+The majority of data operations use the Appwrite **client-side SDK**. Only security-sensitive operations (no-show incrementing, activation email sending) go through server-side API routes using `node-appwrite`.
+
+### 2. Service Layer Pattern
+All business logic is encapsulated in singleton service classes (`src/services/`). Components and hooks never access Appwrite directly — they always go through the service layer. This ensures consistent error handling, data mapping, and query construction.
+
+### 3. Type Safety Throughout
+Every Appwrite document has two TypeScript types:
+- `*Document` — raw shape from Appwrite (extends `Models.Document`)
+- Domain interface — mapped, clean shape used by the application
+- `Create*DTO` / `Update*DTO` — shapes for write operations
+
+Mapper functions bridge the gap between raw documents and domain models.
+
+### 4. Guard-Based Auth
+The `useAuth` hook implements a **multi-guard pattern**:
+1. Session check (Appwrite Auth)
+2. Profile lookup (determine role)
+3. Activation guard (redirect inactive users)
+4. Ban guard (redirect banned patients)
+5. Role guard (prevent cross-role access)
+
+Guards execute sequentially; first failure short-circuits the chain.
+
+### 5. No-Show Accountability
+Patients who repeatedly miss appointments face escalating consequences:
+- 3+ no-shows → 7-day temporary ban
+- 5+ no-shows → permanent ban
+- Bans are checked on every login
+- Expired temporary bans auto-lift
+- Admins can manually ban/unban with reason tracking
+
+### 6. Geographic Relevance
+The platform is tailored to Algeria:
+- City list uses the 58 official wilayas (`algeria-cities.ts`)
+- Doctor search supports city-based filtering
+- Geolocation API enables "nearest doctor" functionality
+- Leaflet map integration shows doctor locations visually
+- Haversine distance calculation for proximity sorting
+
+### 7. Component Modularity
+Landing page follows a strict component-per-section pattern. Each section is self-contained with its own animations, data fetching (where needed), and responsive layout. The `page.tsx` simply composes them in order.
+
+### 8. Progressive Enhancement
+- Landing page works without authentication
+- Doctor search is visible but booking requires login
+- Map loads lazily (Leaflet is client-only)
+- Profile images fall back to initials when unavailable
 
 ---
 

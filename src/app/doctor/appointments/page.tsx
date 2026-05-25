@@ -377,14 +377,13 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { appointmentService } from '@/services/appointment.service';
 import { AppointmentWithPatient, AppointmentStatus } from '@/types/appointment.types';
-import { AppointmentsTable } from '@/components/doctor/AppointmentsTable';
+import { AppointmentRow } from '@/components/doctor/AppointmentRow';
 import { FilterPanel, type Filters } from '@/components/doctor/FilterPanel';
 import { PaginationControls } from '@/components/doctor/PaginationControls';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Calendar, RefreshCw, Filter, Clock, History } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { AlertCircle, Calendar, RefreshCw, Filter, Clock, History, CheckCircle2, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDebounceValue } from 'usehooks-ts';
@@ -643,102 +642,159 @@ export default function DoctorAppointmentsPage() {
     );
   }
 
+  const allAppointments = [...upcomingAppointments, ...pastAppointments];
+  const completedCount  = allAppointments.filter(a => a.status === 'completed').length;
+  const cancelledCount  = allAppointments.filter(a => a.status === 'cancelled').length;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+
+      {/* ── Header banner ── */}
+      <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-2xl px-8 py-6 shadow-lg flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">All Appointments</h1>
-          <p className="text-gray-600 mt-1">Manage and view your appointments history</p>
+          <h1 className="text-3xl font-bold text-white">All Appointments</h1>
+          <p className="text-slate-300 mt-1">Manage and view your appointments history</p>
         </div>
-        <Button onClick={handleRefresh} variant="outline" size="sm" disabled={refreshing}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
-        </Button>
+        </button>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="upcoming" className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Upcoming ({upcomingAppointments.length})
-          </TabsTrigger>
-          <TabsTrigger value="history" className="flex items-center gap-2">
-            <History className="h-4 w-4" />
-            History ({pastAppointments.length})
-          </TabsTrigger>
-        </TabsList>
+      {/* ── Stats cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-slate-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+          <div>
+            <Calendar className="h-5 w-5 text-slate-500 mb-1" />
+            <p className="text-3xl font-bold text-slate-800">{allAppointments.length}</p>
+            <p className="text-sm text-slate-500 font-medium">Total</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-3"><Calendar className="h-6 w-6 text-slate-500" /></div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-blue-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+          <div>
+            <Clock className="h-5 w-5 text-blue-400 mb-1" />
+            <p className="text-3xl font-bold text-blue-600">{upcomingAppointments.length}</p>
+            <p className="text-sm text-slate-500 font-medium">Upcoming</p>
+          </div>
+          <div className="rounded-2xl bg-blue-50 p-3"><Clock className="h-6 w-6 text-blue-500" /></div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-emerald-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+          <div>
+            <CheckCircle2 className="h-5 w-5 text-emerald-400 mb-1" />
+            <p className="text-3xl font-bold text-emerald-600">{completedCount}</p>
+            <p className="text-sm text-slate-500 font-medium">Completed</p>
+          </div>
+          <div className="rounded-2xl bg-emerald-50 p-3"><CheckCircle2 className="h-6 w-6 text-emerald-500" /></div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 border-b-4 border-b-red-400 shadow-md p-5 flex items-center justify-between hover:shadow-lg transition-shadow">
+          <div>
+            <XCircle className="h-5 w-5 text-red-400 mb-1" />
+            <p className="text-3xl font-bold text-red-500">{cancelledCount}</p>
+            <p className="text-sm text-slate-500 font-medium">Cancelled</p>
+          </div>
+          <div className="rounded-2xl bg-red-50 p-3"><XCircle className="h-6 w-6 text-red-500" /></div>
+        </div>
+      </div>
 
-        <TabsContent value={activeTab} className="space-y-6">
-          {/* Filter Panel */}
-          <FilterPanel
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            onClearFilters={clearFilters}
-            hasActiveFilters={hasActiveFilters}
-            totalResults={filteredAndSortedAppointments.length}
-          />
+      {/* ── Tab switcher ── */}
+      <div className="bg-slate-100 rounded-2xl p-1 flex gap-1 w-fit">
+        <button
+          onClick={() => handleTabChange('upcoming')}
+          className={activeTab === 'upcoming'
+            ? 'bg-white rounded-xl px-6 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition-all'
+            : 'px-6 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700 rounded-xl transition-all'}
+        >
+          Upcoming ({upcomingAppointments.length})
+        </button>
+        <button
+          onClick={() => handleTabChange('history')}
+          className={activeTab === 'history'
+            ? 'bg-white rounded-xl px-6 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition-all'
+            : 'px-6 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700 rounded-xl transition-all'}
+        >
+          History ({pastAppointments.length})
+        </button>
+      </div>
 
-          {/* Appointments Table */}
-          <Card className="border-gray-200 shadow-sm">
-            <CardHeader className="border-b bg-gradient-to-r from-gray-50 to-white flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Calendar className="h-5 w-5 text-emerald-600" />
-                {activeTab === 'upcoming' ? 'Upcoming' : 'Past'} Appointments (
-                {filteredAndSortedAppointments.length})
-              </CardTitle>
-              {hasActiveFilters && (
-                <Badge variant="secondary" className="ml-2">
-                  <Filter className="h-3 w-3 mr-1" />
-                  Filtered
-                </Badge>
-              )}
-            </CardHeader>
-            <CardContent className="p-0">
-              {paginatedAppointments.length > 0 ? (
-                <>
-                  <AppointmentsTable
-                    appointments={paginatedAppointments}
-                    onUpdate={handleRefresh}
-                    doctorName={doctor ? `${doctor.firstName} ${doctor.lastName}` : ''}
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSortChange={handleSortChange}
-                  />
-                  {totalPages > 1 && (
-                    <div className="border-t p-4">
-                      <PaginationControls
-                        currentPage={currentPage}
-                        totalPages={totalPages}
-                        onPageChange={setCurrentPage}
-                        totalItems={filteredAndSortedAppointments.length}
-                        itemsPerPage={ITEMS_PER_PAGE}
-                      />
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-16">
-                  <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-600">
-                    {hasActiveFilters
-                      ? 'No appointments match your filters'
-                      : activeTab === 'upcoming'
-                      ? 'No upcoming appointments'
-                      : 'No appointment history yet'}
-                  </p>
-                  {hasActiveFilters && (
-                    <Button variant="link" onClick={clearFilters} className="mt-2">
-                      Clear filters
-                    </Button>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* ── Filter bar ── */}
+      <FilterPanel
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        onClearFilters={clearFilters}
+        hasActiveFilters={hasActiveFilters}
+        totalResults={filteredAndSortedAppointments.length}
+      />
+
+      {/* ── Appointments table card ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden">
+
+        {/* Section header */}
+        <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3 bg-gradient-to-r from-slate-50 to-white">
+          <div className="rounded-xl bg-emerald-100 p-2">
+            <Calendar className="h-5 w-5 text-emerald-600" />
+          </div>
+          <h2 className="text-lg font-bold text-slate-900">
+            {activeTab === 'upcoming' ? 'Upcoming' : 'Past'} Appointments ({filteredAndSortedAppointments.length})
+          </h2>
+          {hasActiveFilters && (
+            <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full">
+              <Filter className="h-3 w-3" /> Filtered
+            </span>
+          )}
+        </div>
+
+        {paginatedAppointments.length > 0 ? (
+          <>
+            <div className="space-y-4 p-6">
+              {paginatedAppointments.map((appointment, index) => (
+                <AppointmentRow
+                  key={appointment.$id}
+                  appointment={appointment}
+                  onUpdate={handleRefresh}
+                  doctorName={doctor ? `${doctor.firstName} ${doctor.lastName}` : ''}
+                  index={index}
+                />
+              ))}
+            </div>
+            {totalPages > 1 && (
+              <div className="border-t border-slate-100 p-4">
+                <PaginationControls
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  totalItems={filteredAndSortedAppointments.length}
+                  itemsPerPage={ITEMS_PER_PAGE}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Calendar className="h-16 w-16 text-slate-200" />
+            <p className="text-lg font-semibold text-slate-400">No appointments found</p>
+            <p className="text-sm text-slate-400">
+              {hasActiveFilters
+                ? 'No appointments match your filters'
+                : activeTab === 'upcoming'
+                ? 'No upcoming appointments'
+                : 'No appointment history yet'}
+            </p>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="text-sm text-emerald-600 hover:text-emerald-700 font-medium mt-1"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
