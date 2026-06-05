@@ -32,6 +32,10 @@ import {
 } from 'lucide-react';
 import type { AppointmentStatus } from '@/types/appointment.types';
 import type { Models } from 'appwrite';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, LineChart, Line,
+} from 'recharts';
 
 // ─── Env vars ────────────────────────────────────────────────────────────────
 
@@ -197,6 +201,50 @@ export default function AdminAppointmentsPage() {
     cancelled: appointments.filter((a) => a.status === 'cancelled').length,
   }), [appointments]);
 
+  // ── Chart data ────────────────────────────────────────────────────────────
+
+  const chartData = useMemo(() => {
+    // 1. Bar chart: appointments per day (last 14 days)
+    const last14Days = Array.from({ length: 14 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (13 - i));
+      return d.toISOString().split('T')[0];
+    });
+    const barData = last14Days.map(day => ({
+      day:   new Date(day).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+      count: appointments.filter(a => a.date?.startsWith(day)).length,
+    }));
+
+    // 2. Pie chart: by status
+    const statusCounts = { pending: 0, confirmed: 0, cancelled: 0 };
+    appointments.forEach(a => {
+      if (a.status in statusCounts)
+        statusCounts[a.status as keyof typeof statusCounts]++;
+    });
+    const pieData = [
+      { name: 'Pending',   value: statusCounts.pending,   color: '#f59e0b' },
+      { name: 'Confirmed', value: statusCounts.confirmed, color: '#10b981' },
+      { name: 'Cancelled', value: statusCounts.cancelled, color: '#ef4444' },
+    ].filter(d => d.value > 0);
+
+    // 3. Line chart: cumulative over last 30 days
+    const last30Days = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (29 - i));
+      return d.toISOString().split('T')[0];
+    });
+    let cumulative = 0;
+    const lineData = last30Days.map(day => {
+      cumulative += appointments.filter(a => a.date?.startsWith(day)).length;
+      return {
+        day:   new Date(day).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+        total: cumulative,
+      };
+    });
+
+    return { barData, pieData, lineData };
+  }, [appointments]);
+
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
@@ -263,154 +311,121 @@ export default function AdminAppointmentsPage() {
         </div>
       )}
 
-      {/* ── Table card ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden">
+      {/* ── Charts section ── */}
+      {!loading && (
+        <div className="space-y-4">
 
-        {/* Card header */}
-        <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-purple-100 p-2">
-              <Calendar className="h-5 w-5 text-purple-600" />
-            </div>
-            <h2 className="text-lg font-bold text-slate-900">
-              All Appointments ({loading ? '…' : filtered.length})
-            </h2>
+          {/* Bar chart — full width */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-md p-6">
+            <p className="text-lg font-bold text-slate-900">Appointments per Day</p>
+            <p className="text-sm text-slate-500 mb-4">Last 14 days</p>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={chartData.barData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="day" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                <Tooltip
+                  contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: 13 }}
+                  cursor={{ fill: '#f3f0ff' }}
+                />
+                <Bar dataKey="count" fill="#7c3aed" radius={[6, 6, 0, 0]} name="Appointments" />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
 
-          {/* Status filter */}
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as AppointmentStatus | 'all')}>
-            <SelectTrigger className="w-40 h-10 rounded-xl border-slate-200 text-sm">
-              <SelectValue placeholder="Filter status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="confirmed">Confirmed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Pie + Line — side by side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            {/* Pie chart */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-md p-6">
+              <p className="text-lg font-bold text-slate-900">Status Distribution</p>
+              <p className="text-sm text-slate-500 mb-4">All appointments</p>
+              {chartData.pieData.length === 0 ? (
+                <div className="flex items-center justify-center h-[300px] text-slate-400 text-sm">
+                  No data yet
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={chartData.pieData}
+                      cx="50%"
+                      cy="45%"
+                      outerRadius={100}
+                      dataKey="value"
+                      label={({ name, percent }) =>
+                        `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                      }
+                      labelLine={false}
+                    >
+                      {chartData.pieData.map((entry, index) => (
+                        <Cell key={index} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: 13 }}
+                    />
+                    <Legend iconType="circle" iconSize={10} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* Line chart */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-md p-6">
+              <p className="text-lg font-bold text-slate-900">Appointments Trend</p>
+              <p className="text-sm text-slate-500 mb-4">Cumulative over 30 days</p>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={chartData.lineData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 11, fill: '#94a3b8' }}
+                    tickFormatter={(val, i) => i % 5 === 0 ? val : ''}
+                  />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: 13 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    stroke="#7c3aed"
+                    strokeWidth={2.5}
+                    dot={false}
+                    name="Total"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+          </div>
         </div>
+      )}
 
-        {loading ? (
-          <div className="space-y-3 p-6">
-            {[1,2,3,4,5].map((i) => (
-              <div key={i} className="flex items-center gap-4">
-                <Skeleton className="h-11 w-11 rounded-2xl flex-shrink-0" />
-                <Skeleton className="h-4 w-36" />
-                <Skeleton className="h-4 w-36" />
-                <Skeleton className="h-4 w-24 ml-auto" />
-                <Skeleton className="h-6 w-24 rounded-full" />
-              </div>
-            ))}
+      {/* Loading skeleton for charts */}
+      {loading && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-md p-6">
+            <Skeleton className="h-6 w-48 mb-2" />
+            <Skeleton className="h-4 w-32 mb-4" />
+            <Skeleton className="h-[300px] w-full rounded-xl" />
           </div>
-        ) : slice.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <Calendar className="h-16 w-16 text-slate-200" />
-            <p className="text-lg font-semibold text-slate-400">No appointments found</p>
-            <p className="text-sm text-slate-400">
-              {statusFilter !== 'all' ? `No ${statusFilter} appointments` : 'No appointments yet'}
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Table header */}
-            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
-              <div className="col-span-3">Patient</div>
-              <div className="col-span-3">Doctor</div>
-              <div className="col-span-2">Date</div>
-              <div className="col-span-2">Time</div>
-              <div className="col-span-2 text-right">Status</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-md p-6">
+              <Skeleton className="h-6 w-48 mb-2" />
+              <Skeleton className="h-4 w-32 mb-4" />
+              <Skeleton className="h-[300px] w-full rounded-xl" />
             </div>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-md p-6">
+              <Skeleton className="h-6 w-48 mb-2" />
+              <Skeleton className="h-4 w-32 mb-4" />
+              <Skeleton className="h-[300px] w-full rounded-xl" />
+            </div>
+          </div>
+        </div>
+      )}
 
-            {/* Rows */}
-            {slice.map((appt) => {
-              const cfg  = STATUS_CONFIG[appt.status];
-              const Icon = cfg.icon;
-              const patientInitials = appt.patientName.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
-              const doctorInitials  = appt.doctorName.replace('Dr. ', '').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
-              return (
-                <div
-                  key={appt.$id}
-                  className="grid grid-cols-12 gap-4 px-6 py-4 items-center border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80 transition-colors"
-                >
-                  {/* Patient */}
-                  <div className="col-span-3 flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md">
-                      {patientInitials}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-slate-900 truncate">{appt.patientName}</p>
-                      <p className="text-xs text-slate-400">Patient</p>
-                    </div>
-                  </div>
-
-                  {/* Doctor */}
-                  <div className="col-span-3 flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md">
-                      {doctorInitials}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-slate-900 truncate">{appt.doctorName}</p>
-                      <p className="text-xs text-slate-400">Doctor</p>
-                    </div>
-                  </div>
-
-                  {/* Date */}
-                  <div className="col-span-2">
-                    <span className="flex items-center gap-1.5 text-sm text-slate-600">
-                      <Calendar className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                      {formatDate(appt.date)}
-                    </span>
-                  </div>
-
-                  {/* Time */}
-                  <div className="col-span-2">
-                    <span className="flex items-center gap-1.5 text-sm text-slate-600">
-                      <Clock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                      {formatTime(appt.startTime)}
-                    </span>
-                  </div>
-
-                  {/* Status */}
-                  <div className="col-span-2 flex justify-end">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${cfg.className}`}>
-                      <Icon className="h-3.5 w-3.5" />
-                      {cfg.label}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-                <p className="text-sm text-slate-500">
-                  Page {safePage} of {totalPages} — {filtered.length} appointments
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={safePage <= 1}
-                    onClick={() => setPage((p) => p - 1)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" /> Previous
-                  </button>
-                  <button
-                    disabled={safePage >= totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
     </div>
   );
-
 }

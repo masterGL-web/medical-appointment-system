@@ -148,3 +148,43 @@ class NoShowService {
 }
 
 export const noShowService = new NoShowService();
+
+// ─── Pure utility functions (used by /api/handle-noshow route) ────────────────
+
+/**
+ * Returns count of no-shows in the last 60 days from a list of appointment dates.
+ * Rolling-window equivalent of SQL's DATE_SUB(NOW(), INTERVAL 2 MONTH).
+ */
+export function countRecentNoShows(noShowDates: string[]): number {
+  const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  return noShowDates.filter(d => new Date(d).getTime() >= now - SIXTY_DAYS_MS).length;
+}
+
+/**
+ * Pure decision: given recent no-show count → graduated ban state.
+ * 3 no-shows → 7-day ban
+ * 4 no-shows → 14-day ban
+ * 5+ no-shows → permanent ban
+ * No side effects — only returns a decision object.
+ */
+export function evaluateBan(recentCount: number): {
+  shouldBan:      boolean;
+  banStatus:      'none' | 'temporary' | 'permanent';
+  banDurationDays: number | null;
+  banReason:      string | null;
+} {
+  if (recentCount >= 5) return {
+    shouldBan: true, banStatus: 'permanent', banDurationDays: null,
+    banReason: `Permanent ban: ${recentCount} no-shows in the last 60 days.`,
+  };
+  if (recentCount === 4) return {
+    shouldBan: true, banStatus: 'temporary', banDurationDays: 14,
+    banReason: '4 no-shows in the last 60 days. Banned for 14 days.',
+  };
+  if (recentCount === 3) return {
+    shouldBan: true, banStatus: 'temporary', banDurationDays: 7,
+    banReason: '3 no-shows in the last 60 days. Banned for 7 days.',
+  };
+  return { shouldBan: false, banStatus: 'none', banDurationDays: null, banReason: null };
+}

@@ -777,11 +777,11 @@ export default function AdminPatientsPage() {
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => handleBan(patient, 'temporary', 30)} className="cursor-pointer text-amber-700">
-                        <ShieldBan className="h-4 w-4 mr-2" /> Ban 1 month
+                      <DropdownMenuItem onClick={() => handleBan(patient, 'temporary', 7)} className="cursor-pointer text-amber-700">
+                        <ShieldBan className="h-4 w-4 mr-2" /> Ban 1 week
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleBan(patient, 'temporary', 90)} className="cursor-pointer text-amber-700">
-                        <ShieldBan className="h-4 w-4 mr-2" /> Ban 3 months
+                      <DropdownMenuItem onClick={() => handleBan(patient, 'temporary', 14)} className="cursor-pointer text-amber-700">
+                        <ShieldBan className="h-4 w-4 mr-2" /> Ban 2 weeks
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setPermBanTarget(patient)} className="cursor-pointer text-red-600">
                         <ShieldBan className="h-4 w-4 mr-2" /> Permanent ban

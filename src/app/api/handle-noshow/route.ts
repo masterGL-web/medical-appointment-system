@@ -241,18 +241,14 @@
 // }
 // src/app/api/handle-noshow/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { countRecentNoShows, evaluateBan } from '@/services/noshow.service';
 
 const ENDPOINT  = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!;
 const PROJECT   = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!;
 const DATABASE  = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const API_KEY   = process.env.APPWRITE_API_KEY!;
 const PATS_COL  = process.env.NEXT_PUBLIC_APPWRITE_PATIENTS_COLLECTION_ID!;
-
-// ─── Thresholds ───────────────────────────────────────────────────────────────
-
-const TEMP_BAN_THRESHOLD = 3;
-const PERM_BAN_THRESHOLD = 5;
-const TEMP_BAN_DAYS      = 30;
+const APPTS_COL = process.env.NEXT_PUBLIC_APPWRITE_APPOINTMENTS_COLLECTION_ID!;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -262,12 +258,6 @@ function appwriteHeaders(): Record<string, string> {
     'X-Appwrite-Project': PROJECT,
     'X-Appwrite-Key':     API_KEY,
   };
-}
-
-function addDays(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString();
 }
 
 function qEqual(attribute: string, value: string): string {
@@ -347,50 +337,51 @@ async function handleNoShow(patientUserId: string): Promise<{
     throw new Error(`No patient document found for patientId: ${patientUserId}`);
   }
 
-  // ── Step 2: INCREMENT stored count by 1 (not recount from appointments) ───
-  // This is the key fix: we trust the stored noShowCount field.
-  // Admin can reset it to 0 via removeBan, and it will stay 0.
+  // ── Step 2: fetch no-show appointments and extract their dates ────────────
 
-  const currentCount    = (patientDoc.noShowCount as number) ?? 0;
-  const newNoShowCount  = currentCount + 1;
+  const apptResult = await listDocuments(APPTS_COL, [
+    qEqual('patientId',   patientUserId),
+    qEqual('status',      'cancelled'),
+    qEqual('cancelledBy', 'doctor'),
+    qLimit(200),
+  ]);
 
-  console.log(`[handle-noshow] incrementing noShowCount: ${currentCount} → ${newNoShowCount}`);
+  const noShowDates: string[] = apptResult.documents
+    .filter((doc) => {
+      const reason = (doc.cancelReason as string | undefined | null) ?? '';
+      return reason.toLowerCase().includes('no-show');
+    })
+    .map((doc) => doc.$createdAt as string);
 
-  // ── Step 3: determine ban state ───────────────────────────────────────────
+  // ── Step 3: count recent no-shows (rolling 60-day window) ─────────────────
+
+  const recentCount = countRecentNoShows(noShowDates);
+
+  // ── Step 4: decide ban state ───────────────────────────────────────────────
+
+  const { shouldBan, banStatus, banDurationDays, banReason } = evaluateBan(recentCount);
+
+  // ── Step 5: build update payload (never downgrade a permanent ban) ─────────
 
   const currentBanStatus = (patientDoc.banStatus as string) ?? 'none';
+  const newBanStatus = currentBanStatus === 'permanent' ? 'permanent' : banStatus;
 
-  let banStatus  = currentBanStatus;
-  let banUntil:  string | null = (patientDoc.banUntil  as string | null) ?? null;
-  let banReason: string | null = (patientDoc.banReason as string | null) ?? null;
-  let banApplied = false;
+  const banUntil = shouldBan && banDurationDays
+    ? (() => { const d = new Date(); d.setDate(d.getDate() + banDurationDays); return d.toISOString(); })()
+    : null;
 
-  if (newNoShowCount >= PERM_BAN_THRESHOLD && currentBanStatus === 'temporary') {
-    // Escalate to permanent
-    banStatus  = 'permanent';
-    banUntil   = null;
-    banReason  = `Permanent ban: ${newNoShowCount} no-shows recorded.`;
-    banApplied = true;
-  } else if (newNoShowCount >= TEMP_BAN_THRESHOLD && currentBanStatus === 'none') {
-    // Apply temporary ban
-    banStatus  = 'temporary';
-    banUntil   = addDays(TEMP_BAN_DAYS);
-    banReason  = `Automatic ban: ${newNoShowCount} no-shows recorded. Banned for 30 days.`;
-    banApplied = true;
-  }
-
-  // ── Step 4: update patient ────────────────────────────────────────────────
+  // ── Step 6: update patient ─────────────────────────────────────────────────
 
   await updateDocument(PATS_COL, patientDocumentId, {
-    noShowCount: newNoShowCount,
-    banStatus,
+    noShowCount: recentCount,
+    banStatus:   newBanStatus,
     banUntil,
-    banReason,
+    banReason:   shouldBan ? banReason : null,
   });
 
-  console.log(`[handle-noshow] patient updated → noShowCount: ${newNoShowCount}, banStatus: ${banStatus}`);
+  // ── Step 7: return result ──────────────────────────────────────────────────
 
-  return { noShowCount: newNoShowCount, banApplied, banStatus };
+  return { noShowCount: recentCount, banApplied: shouldBan, banStatus: newBanStatus };
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
